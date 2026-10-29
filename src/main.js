@@ -19,12 +19,12 @@ const SOLO_ONLY = import.meta.env.VITE_SOLO_ONLY === '1';
 const $ = (s) => document.querySelector(s);
 $('#app').innerHTML = `
 <div id="world" aria-label="Scène de jeu en trois dimensions"></div><div class="grain"></div><div class="vignette"></div>
-<header id="masthead"><a class="brand" href="/" aria-label="Accueil"><span class="brand-symbol">↶</span><span>RDS<span class="brand-sub">UN TRÈS MAUVAIS PLAN</span></span></a><div class="edition"><span class="status-dot"></span> SOLO · HORREUR · MAUVAISES DÉCISIONS <span class="version">VOL. 01 / LA MAISON</span></div></header>
-<main id="menu"><div class="eyebrow"><span></span> LES CHASSEURS ONT UN PROBLÈME.</div><h1>RETOURNEMENT<br>DE <em>SITUATION</em><span class="title-dot">.</span></h1><p class="tagline">Cette fois, ce sont eux qui vous cherchent.</p><p class="pitch">Un tueur. Huit invités très contrariés.<br>Une nuit pour regretter d’être venus.</p><div class="solo-selection" role="group" aria-label="Personnage solo"><span>VOTRE MASQUE</span><button data-solo-character="0" class="selected" aria-pressed="true">DIAG</button><button data-solo-character="1" aria-pressed="false">Swonni</button></div><button id="solo" class="primary">Jouer en solo <span>↗</span></button><details class="coop-options"><summary>Coopération à deux · pour plus tard</summary><div class="menu-actions"><button id="create" class="primary"><span>Créer une partie</span><span>↗</span></button><button id="join-open" class="secondary">Rejoindre une partie <span>+</span></button></div></details><div class="menu-bottom"><button id="settings-open" class="text-button">⚙ &nbsp;Paramètres</button><span>1 JOUEUR <i>·</i> AUCUN CODE REQUIS</span></div><div class="join-panel hidden" id="join-panel"><label for="join-code">CODE D’INVITATION</label><div><input id="join-code" maxlength="6" placeholder="ABC123" autocomplete="off" spellcheck="false"><button id="join" class="primary">Entrer ↗</button></div></div></main>
+<header id="masthead"><a class="brand" href="/" aria-label="Accueil"><span class="brand-symbol">↶</span><span>RDS<span class="brand-sub">UN TRÈS MAUVAIS PLAN</span></span></a><div class="edition"><span class="status-dot"></span> SOLO · HORREUR · MAUVAISES DÉCISIONS <span class="version">V0.2 / INFILTRATION</span></div></header>
+<main id="menu"><div class="eyebrow"><span></span> LES CHASSEURS ONT UN PROBLÈME.</div><h1>RETOURNEMENT<br>DE <em>SITUATION</em><span class="title-dot">.</span></h1><p class="tagline">Cette fois, ce sont eux qui vous cherchent.</p><p class="pitch">Entrez sans bruit. Isolez vos cibles.<br>Un corps découvert, et les rôles s’inversent.</p><div class="solo-selection" role="group" aria-label="Personnage solo"><span>VOTRE MASQUE</span><button data-solo-character="0" class="selected" aria-pressed="true">DIAG</button><button data-solo-character="1" aria-pressed="false">Swonni</button></div><button id="solo" class="primary">Jouer en solo <span>↗</span></button><details class="coop-options"><summary>Coopération à deux · pour plus tard</summary><div class="menu-actions"><button id="create" class="primary"><span>Créer une partie</span><span>↗</span></button><button id="join-open" class="secondary">Rejoindre une partie <span>+</span></button></div></details><div class="menu-bottom"><button id="settings-open" class="text-button">⚙ &nbsp;Paramètres</button><span>1 JOUEUR <i>·</i> AUCUN CODE REQUIS</span></div><div class="join-panel hidden" id="join-panel"><label for="join-code">CODE D’INVITATION</label><div><input id="join-code" maxlength="6" placeholder="ABC123" autocomplete="off" spellcheck="false"><button id="join" class="primary">Entrer ↗</button></div></div></main>
 <div id="scene-caption"><span class="tiny">01 / RÉSIDENCE DES ÉRABLES</span><strong>La soirée vient<br>de mal tourner.</strong><p>Ils étaient venus pour faire peur.<br>Ils vont apprendre à se cacher.</p><div class="caption-line"></div><span class="tiny">QUELQUE PART, BEAUCOUP TROP LOIN DES SECOURS.</span></div>
 <footer id="footer"><span>UNE NUIT. UN MASQUE. ZÉRO PLAN B.</span><span>CASQUE CONSEILLÉ <span class="headphone">♬</span></span></footer>
 <section id="lobby" class="panel hidden"><div class="eyebrow">LA PORTE EST ENCORE OUVERTE.</div><h2>Bienvenue dans<br>les ennuis.</h2><p>Partagez ce code avec votre partenaire.</p><button id="copy-code" title="Copier le code"><strong id="room-code"></strong><span>Copier ↗</span></button><div class="roles"><button data-character="0"><span class="mask-icon diag">◈</span><strong>DIAG</strong><small>LE MAUVAIS PRESSENTIMENT</small><span class="role-status"></span></button><button data-character="1"><span class="mask-icon swonni">◈</span><strong>Swonni</strong><small>LA PIRE DES BONNES IDÉES</small><span class="role-status"></span></button></div><p id="lobby-status"></p><button id="start" class="primary" disabled>Commencer la nuit <span>↗</span></button><button id="practice" class="text-button">Jouer seul avec ce personnage</button><button id="leave" class="text-button">← Quitter le salon</button><p class="lobby-help">ZQSD / WASD · Marcher &nbsp; E · Interagir<br>Maj · Courir &nbsp; Ctrl / C · S’accroupir &nbsp; F · Lampe</p></section>
-<div id="hud" class="hidden"><div class="hud-top"><div class="night"><span class="tiny">TENIR JUSQU’À L’AUBE</span><strong id="timer">09:00</strong><span id="floor-name"></span></div><div class="room-tag"><span id="mode-label">SALON</span> <b id="hud-code"></b><button id="hud-settings" aria-label="Paramètres">☷</button></div></div><div id="team"></div><div id="toast" role="status"></div><div id="dialogue"></div><div id="intro" class="hidden"><div class="eyebrow">ÇA NE SE PASSE PAS COMME PRÉVU.</div><h2>LES PROIES ONT<br>CHANGÉ DE CAMP.</h2><p>Cachez-vous. Ils arrivent dans <b id="intro-count">10</b> secondes.</p></div><div class="hud-bottom"><div class="stealth"><span id="stealth-label">DISCRET</span><div class="meter"><i id="stamina"></i></div><span id="inventory">G · BOUTEILLES × 3</span></div><div id="interaction"></div><div class="control-help"><kbd>E</kbd> interagir <kbd>F</kbd> lampe <kbd>Tab</kbd> équipe</div></div><div id="rescue-bar" class="hidden"><span>DÉTACHER LE PARTENAIRE</span><div class="meter"><i></i></div></div><div id="connection" class="hidden"></div><div id="scoreboard" class="panel hidden"><div class="eyebrow">ON FAIT LE POINT.</div><h2>État de la nuit</h2><div id="scoreboard-content"></div><p id="rules">Survivez 9 minutes. E : portes, cachettes, escaliers et objets.<br>G : lancer une bouteille vers la souris.<br>Capturé ? Votre partenaire dispose de 75 secondes pour vous libérer.<br>Maintenir E à proximité pendant 2,5 secondes.<br>Les paramètres ne mettent pas la partie en pause.</p></div></div>
+<div id="hud" class="hidden"><div class="hud-top"><div class="night"><span class="tiny">TENIR JUSQU’À L’AUBE</span><strong id="timer">09:00</strong><span id="objective"></span><span id="floor-name"></span></div><div class="room-tag"><span id="mode-label">SALON</span> <b id="hud-code"></b><button id="hud-settings" aria-label="Paramètres">☷</button></div></div><div id="team"></div><div id="toast" role="status"></div><div id="dialogue"></div><div id="intro" class="hidden"><div class="eyebrow">ÇA NE SE PASSE PAS COMME PRÉVU.</div><h2>LES PROIES ONT<br>CHANGÉ DE CAMP.</h2><p>Cachez-vous. Ils arrivent dans <b id="intro-count">10</b> secondes.</p></div><div class="hud-bottom"><div class="stealth"><span id="stealth-label">DISCRET</span><div class="meter"><i id="stamina"></i></div><span id="inventory">G · BOUTEILLES × 3</span></div><div id="interaction"></div><div class="control-help"><kbd>E</kbd> interagir <kbd>F</kbd> lampe <kbd>Espace</kbd> éliminer <kbd>R</kbd> corps <kbd>Tab</kbd> équipe</div></div><div id="rescue-bar" class="hidden"><span>DÉTACHER LE PARTENAIRE</span><div class="meter"><i></i></div></div><div id="connection" class="hidden"></div><div id="scoreboard" class="panel hidden"><div class="eyebrow">ON FAIT LE POINT.</div><h2>État de la nuit</h2><div id="scoreboard-content"></div><p id="rules">Survivez 9 minutes. E : portes, cachettes, escaliers et objets.<br>G : lancer une bouteille vers la souris.<br>Capturé ? Votre partenaire dispose de 75 secondes pour vous libérer.<br>Maintenir E à proximité pendant 2,5 secondes.<br>Les paramètres ne mettent pas la partie en pause.</p></div></div>
 <section id="end" class="panel hidden"><div class="eyebrow" id="end-eyebrow"></div><h2 id="end-title"></h2><p id="end-text"></p><button id="restart" class="primary">Encore une mauvaise idée ↗</button><button id="end-leave" class="text-button">Retour à l’accueil</button></section>
 <dialog id="settings"><button class="close" id="settings-close" aria-label="Fermer">×</button><div class="eyebrow">UN PEU DE CONTRÔLE.</div><h2>Paramètres</h2><label>Ambiance / musique<input id="music" type="range" min="0" max="100" value="22"></label><label>Effets sonores<input id="effects" type="range" min="0" max="100" value="55"></label><label>Voix des invités<input id="voices" type="range" min="0" max="100" value="55"></label><label class="check"><input id="quality" type="checkbox"> Mode performances (sans ombres)</label><p>Déplacement : ZQSD ou WASD / flèches<br>Courir : Maj · S’accroupir : Ctrl ou C<br>E : interagir / maintenir pour sauver · F : lampe<br>G : lancer · Tab : équipe · Échap : paramètres<br><br>En multijoueur, la nuit continue dans les paramètres.<br>Voix françaises : synthèse vocale du navigateur, si disponible.</p></dialog><div id="error" role="alert" class="hidden"></div>`;
 if (SOLO_ONLY) {
@@ -330,15 +330,22 @@ function updateUI() {
   setText(
     '#rules',
     state.mode === 'solo'
-      ? 'Survivez 9 minutes. E : portes, cachettes, escaliers et objets. G : lancer une bouteille vers la souris. Vous êtes seul : une capture termine la partie. Échap : paramètres et pause.'
-      : 'Survivez 9 minutes. E : portes, cachettes, escaliers et objets. G : lancer une bouteille. Maintenir E 2,5 secondes près du partenaire capturé pour le libérer avant 75 secondes.',
+      ? 'Entrez depuis le jardin. Éliminez tous les invités ou survivez jusqu’à l’aube. E : portes et cachettes. Maintenir E 2 s : ouvrir une fenêtre. Espace : éliminer un invité isolé à portée. R : traîner / déposer un corps (le sang reste). G : bouteille. Un corps ou du sang découvert déclenche la chasse. Échap : pause.'
+      : 'Entrez ensemble depuis le jardin. Éliminez les invités ou survivez jusqu’à l’aube. Espace : éliminer une cible isolée ; R : traîner un corps ; E : porte, cachette, escalier ; maintenir E : fenêtre ou sauvetage. Corps et sang découverts déclenchent la chasse.',
   );
   const secs = Math.ceil(state.remaining);
   setText(
     '#timer',
     `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`,
   );
-  setText('#floor-name', `${FLOORS[me.f]} · ${roomAt(me.f, me.x, me.z)?.name || 'Couloir'}`);
+  setText(
+    '#objective',
+    `${state.phase === 'infiltration' ? 'INFILTRATION' : 'CHASSE'} · ${state.living ?? state.guards.length} INVITÉS EN VIE`,
+  );
+  setText(
+    '#floor-name',
+    `${FLOORS[me.f]} · ${roomAt(me.f, me.x, me.z)?.name || (Math.abs(me.x) > 18 || Math.abs(me.z) > 12 ? 'Jardin' : 'Couloir')}`,
+  );
   $('#intro').classList.toggle('hidden', state.phase !== 'intro');
   setText('#intro-count', String(Math.max(0, Math.ceil(10 - state.time))));
   const team = $('#team');
@@ -399,8 +406,12 @@ function updateUI() {
     `G · BOUTEILLES × ${me.bottles}   /   F · LAMPE ${me.torch ? 'ON' : 'OFF'}`,
   );
   setText('#interaction', interaction(me));
-  $('#rescue-bar').classList.toggle('hidden', !me.rescue);
-  $('#rescue-bar i').style.width = `${(me.rescue / 2.5) * 100}%`;
+  $('#rescue-bar').classList.toggle('hidden', !me.rescue && !me.openProgress);
+  $('#rescue-bar span').textContent = me.openProgress
+    ? 'DÉVERROUILLER LA FENÊTRE'
+    : 'DÉTACHER LE PARTENAIRE';
+  $('#rescue-bar i').style.width =
+    `${(me.openProgress ? me.openProgress / 2 : me.rescue / 2.5) * 100}%`;
   const sb = $('#scoreboard-content');
   sb.replaceChildren(
     ...state.players.map((p) => {
@@ -424,7 +435,19 @@ function updateUI() {
       setTimeout(() => $('#hud').classList.remove('hurt'), 350);
     }
     if (
-      ['hunt', 'capture', 'rescue', 'eliminate', 'pickup', 'stairs'].includes(e.type) &&
+      [
+        'hunt',
+        'infiltration',
+        'kill',
+        'warning',
+        'drag',
+        'drop',
+        'capture',
+        'rescue',
+        'eliminate',
+        'pickup',
+        'stairs',
+      ].includes(e.type) &&
       (!e.player || e.player === myId || e.type === 'capture' || e.type === 'rescue')
     ) {
       setText('#toast', e.text);
@@ -442,23 +465,27 @@ function updateUI() {
     setText('#end-eyebrow', win ? '05:47 / LE JOUR SE LÈVE.' : 'LA SOIRÉE EST TERMINÉE.');
     setText(
       '#end-title',
-      state.result === 'solo'
-        ? 'Vous avez tenu.'
-        : state.result === 'perfect'
-          ? 'Vivants. Tous les deux.'
-          : win
-            ? 'L’un de vous a tenu.'
-            : 'Mauvais quartier.',
+      state.result === 'elimination'
+        ? 'Plus un bruit.'
+        : state.result === 'solo'
+          ? 'Vous avez tenu.'
+          : state.result === 'perfect'
+            ? 'Vivants. Tous les deux.'
+            : win
+              ? 'L’un de vous a tenu.'
+              : 'Mauvais quartier.',
     );
     setText(
       '#end-text',
-      state.result === 'solo'
-        ? 'Victoire solo. Un masque, huit poursuivants, et vous avez vu l’aube.'
-        : state.result === 'perfect'
-          ? 'Victoire coopérative parfaite. Ils ne vous inviteront plus jamais.'
-          : win
-            ? 'Victoire individuelle imparfaite. Il manque quelqu’un sur la photo.'
-            : 'Les invités ont repris la maison. Les tueurs ont perdu la face.',
+      state.result === 'elimination'
+        ? 'Tous les invités sont éliminés. Vous avez repris la maison.'
+        : state.result === 'solo'
+          ? 'Victoire solo. Un masque, huit poursuivants, et vous avez vu l’aube.'
+          : state.result === 'perfect'
+            ? 'Victoire coopérative parfaite. Ils ne vous inviteront plus jamais.'
+            : win
+              ? 'Victoire individuelle imparfaite. Il manque quelqu’un sur la photo.'
+              : 'Les invités ont repris la maison. Les tueurs ont perdu la face.',
     );
     $('#restart').disabled = state.host !== myId;
   }
@@ -467,6 +494,31 @@ function updateUI() {
 function interaction(p) {
   if (p.status !== 'free') return '';
   if (p.hidden) return 'E · Sortir de la cachette';
+  if (p.dragging) return 'R · Déposer le corps · E pour les portes';
+  const target = state.guards.find(
+    (g) =>
+      g.alive !== false && g.f === p.f && distance(p, g) < 1.6 && lineClear(p.f, p, g, state.doors),
+  );
+  if (target) {
+    const watched = state.guards.some(
+      (g) =>
+        g !== target &&
+        g.alive !== false &&
+        g.f === target.f &&
+        distance(g, target) < 6 &&
+        lineClear(g.f, g, target, state.doors),
+    );
+    return watched
+      ? 'Cible surveillée · attendez qu’elle soit isolée'
+      : 'Espace · Éliminer la cible isolée';
+  }
+  if (
+    state.bodies?.some(
+      (b) =>
+        !b.draggedBy && b.f === p.f && distance(p, b) < 1.9 && lineClear(p.f, p, b, state.doors),
+    )
+  )
+    return 'R · Traîner le corps · le sang restera';
   const mate = state.players.find(
     (o) => o.id !== p.id && o.f === p.f && o.status === 'captured' && distance(p, o) < 1.7,
   );
@@ -490,7 +542,9 @@ function interaction(p) {
   if (!n) return '';
   const { obj, kind } = n;
   return kind === 'door'
-    ? `E · ${state.doors[obj.id] ? 'Fermer' : 'Ouvrir'} la porte`
+    ? obj.window && !state.doors[obj.id]
+      ? 'Maintenir E · Déverrouiller la fenêtre (2 s)'
+      : `E · ${state.doors[obj.id] ? 'Fermer' : 'Ouvrir'} ${obj.window ? 'la fenêtre' : 'la porte'}`
     : kind === 'hide'
       ? 'E · Se cacher'
       : kind === 'stairs'
@@ -506,6 +560,8 @@ function interaction(p) {
 window.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement) return;
   if (
+    state &&
+    ['intro', 'playing', 'infiltration'].includes(state.phase) &&
     [
       'Tab',
       'ArrowUp',
@@ -534,6 +590,8 @@ window.addEventListener('keydown', (e) => {
   if (e.repeat) return;
   if (e.code === 'KeyE') send({ type: 'action', action: 'interact' });
   if (e.code === 'KeyF') send({ type: 'action', action: 'torch' });
+  if (e.code === 'Space') send({ type: 'action', action: 'attack' });
+  if (e.code === 'KeyR') send({ type: 'action', action: 'drag' });
   if (e.code === 'KeyG') send({ type: 'action', action: 'throw' });
 });
 window.addEventListener('keyup', (e) => {
@@ -573,7 +631,12 @@ function frame(now) {
     frames = 0;
     measureAt = now;
   }
-  if (now - lastInput > 50 && state && ['intro', 'playing'].includes(state.phase) && connected) {
+  if (
+    now - lastInput > 50 &&
+    state &&
+    ['intro', 'playing', 'infiltration'].includes(state.phase) &&
+    connected
+  ) {
     lastInput = now;
     const blocked = $('#settings').open;
     const x = blocked
@@ -603,6 +666,10 @@ Object.defineProperty(window, '__RDS', {
     myId,
     connected,
     fps,
+    visibleRooms: scene.visibleRooms ? [...scene.visibleRooms] : [],
+    visibleGuards: [...scene.actors]
+      .filter(([id, a]) => id.startsWith('g') && a.root.visible)
+      .map(([id]) => id),
     drawCalls: scene.renderer.info.render.calls,
     triangles: scene.renderer.info.render.triangles,
   }),

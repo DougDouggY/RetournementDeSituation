@@ -25,7 +25,12 @@ const personalities = [
   'prudent',
 ];
 export class Simulation {
-  constructor({ duration = NIGHT, seed = 2701 } = {}) {
+  constructor({ duration = NIGHT, seed = 2701, scenario = 'infiltration' } = {}) {
+    this.scenario = scenario;
+    this.bodies = [];
+    this.blood = [];
+    this.alarmAt = null;
+    this.lastSpeech = -20;
     this.duration = duration;
     this.seed = seed;
     this.phase = 'lobby';
@@ -81,7 +86,11 @@ export class Simulation {
     if (this.players.length < 2 && !practice) return false;
     this.practice = practice;
     this.solo = practice && this.players.length === 1;
-    this.phase = 'intro';
+    this.phase = this.scenario === 'hunt' ? 'intro' : 'infiltration';
+    this.bodies = [];
+    this.blood = [];
+    this.alarmAt = null;
+    this.lastSpeech = -20;
     this.time = 0;
     this.remaining = this.duration;
     this.result = null;
@@ -94,8 +103,12 @@ export class Simulation {
     this.lightStates = Object.fromEntries(rooms.map((r) => [r.id, true]));
     this.players.forEach((p, i) =>
       Object.assign(p, {
-        x: -12 + i * 2,
-        z: -3.8,
+        x: this.scenario === 'hunt' ? -12 + i * 2 : -22,
+        z: this.scenario === 'hunt' ? -3.8 : i * 2,
+        dragging: null,
+        opening: null,
+        openProgress: 0,
+        attackCooldown: 0,
         f: 1,
         hp: 3,
         status: 'free',
@@ -134,6 +147,8 @@ export class Simulation {
         f: 1,
         angle: 0,
         state: 'patrol',
+        alive: true,
+        armed: this.scenario === 'hunt',
         path: [],
         think: 1 + i * 0.3,
         target: null,
@@ -145,12 +160,14 @@ export class Simulation {
         inspection: 0,
       });
     }
-    this.event(
-      'intro',
-      this.solo
-        ? 'ATTENDEZ… IL EST TOUT SEUL ! ON EST HUIT, BORDEL !'
-        : 'ATTENDEZ… ILS SONT QUE DEUX ! ON EST HUIT, BORDEL !',
-    );
+    if (this.scenario === 'hunt')
+      this.event(
+        'intro',
+        this.solo
+          ? 'ATTENDEZ… IL EST TOUT SEUL ! ON EST HUIT, BORDEL !'
+          : 'ATTENDEZ… ILS SONT QUE DEUX ! ON EST HUIT, BORDEL !',
+      );
+    else this.event('infiltration', 'Entrez discrètement. Personne ne se doute encore de rien.');
     return true;
   }
   setInput(id, data) {
@@ -170,7 +187,7 @@ export class Simulation {
     this.noises.push(n);
     this.event('noise', text, { f, x, z });
     for (const g of this.guards)
-      if (g.f === f && g.state !== 'chase' && g.state !== 'escort') {
+      if (g.alive !== false && g.f === f && g.state !== 'chase' && g.state !== 'escort') {
         const clear = lineClear(f, g, n, this.doorStates, true),
           range = radius * (clear ? 1 : 0.45);
         if (distance(g, n) < range) {
@@ -184,7 +201,8 @@ export class Simulation {
   }
   interact(id) {
     const p = this.players.find((p) => p.id === id);
-    if (!p || p.status !== 'free' || !['intro', 'playing'].includes(this.phase)) return;
+    if (!p || p.status !== 'free' || !['intro', 'playing', 'infiltration'].includes(this.phase))
+      return;
     if (p.hidden) {
       p.hidden = null;
       p.invuln = Math.max(p.invuln, 0.4);
@@ -197,6 +215,12 @@ export class Simulation {
     p.interactUntil = this.time + 0.55;
     if (kind === 'rescue') return;
     if (kind === 'door') {
+      if (obj.window && !this.doorStates[obj.id]) {
+        p.opening = obj.id;
+        p.openStarted = this.time;
+        p.openProgress = 0;
+        return;
+      }
       this.doorStates[obj.id] = !this.doorStates[obj.id];
       this.event('door', this.doorStates[obj.id] ? 'Porte ouverte' : 'Porte fermée', {
         f: p.f,
@@ -206,6 +230,10 @@ export class Simulation {
       if (p.input.run) this.noise(p.f, p.x, p.z, 12, 'CLAC ! La porte a parlé.', p.id);
     }
     if (kind === 'hide') {
+      if (p.dragging) {
+        this.event('warning', 'Déposez le corps avant de vous cacher.', { player: p.id });
+        return;
+      }
       if (this.players.some((o) => o.hidden === obj.id)) return;
       p.hidden = obj.id;
       p.torch = false;
@@ -299,9 +327,11 @@ export class Simulation {
     return targets.sort((a, b) => a.dist - b.dist)[0];
   }
   action(id, type) {
-    if (!['intro', 'playing'].includes(this.phase)) return;
+    if (!['intro', 'playing', 'infiltration'].includes(this.phase)) return;
     const p = this.players.find((p) => p.id === id);
     if (!p) return;
+    if (type === 'attack') this.stab(p);
+    if (type === 'drag') this.toggleDrag(p);
     if (type === 'interact') this.interact(id);
     if (type === 'torch' && p.status === 'free' && !p.hidden) {
       p.torch = !p.torch;
@@ -340,7 +370,7 @@ export class Simulation {
     return moved;
   }
   canSee(g, p) {
-    if (g.f !== p.f || p.status !== 'free' || p.hidden) return false;
+    if (g.alive === false || g.f !== p.f || p.status !== 'free' || p.hidden) return false;
     const d = distance(g, p),
       r = roomAt(p.f, p.x, p.z),
       lit = !r || this.lightStates[r.id];
@@ -348,14 +378,198 @@ export class Simulation {
     if (d > range) return false;
     const facing = Math.atan2(p.x - g.x, p.z - g.z),
       angle = Math.atan2(Math.sin(facing - g.angle), Math.cos(facing - g.angle));
-    return (d < 1.5 || Math.abs(angle) < 0.85) && lineClear(g.f, g, p, this.doorStates);
+    return Math.abs(angle) < 0.85 && lineClear(g.f, g, p, this.doorStates);
   }
   speak(g, text) {
+    if (this.time - this.lastSpeech < 5 || this.time < (g.nextSpeech || 0)) return;
+    this.lastSpeech = this.time;
+    g.nextSpeech = this.time + 16;
     g.say = text;
     g.sayUntil = this.time + 3.2;
     this.event('voice', `${g.name} : « ${text} »`, { f: g.f, x: g.x, z: g.z });
   }
+  isolated(g) {
+    return !this.guards.some(
+      (other) =>
+        other !== g &&
+        other.alive !== false &&
+        other.f === g.f &&
+        distance(other, g) < 6 &&
+        lineClear(g.f, other, g, this.doorStates),
+    );
+  }
+  stab(p) {
+    if (p.status !== 'free' || p.hidden || p.dragging || p.attackCooldown > 0) return;
+    const target = this.guards
+      .filter(
+        (g) =>
+          g.alive !== false &&
+          g.f === p.f &&
+          distance(g, p) < 1.6 &&
+          lineClear(p.f, p, g, this.doorStates),
+      )
+      .sort((a, b) => distance(p, a) - distance(p, b))[0];
+    if (!target) return;
+    if (!this.isolated(target)) {
+      this.event('warning', 'Trop de témoins. Attendez qu’il soit isolé.', { player: p.id });
+      return;
+    }
+    target.alive = false;
+    target.state = 'dead';
+    target.armed = false;
+    target.target = null;
+    p.attackCooldown = 1.2;
+    p.attackUntil = this.time + 0.6;
+    const body = {
+      id: `body-${target.id}`,
+      guard: target.id,
+      index: Number(target.id.slice(1)),
+      name: target.name,
+      f: target.f,
+      x: target.x,
+      z: target.z,
+      angle: target.angle,
+      draggedBy: null,
+    };
+    body.lastBlood = { x: body.x, z: body.z };
+    this.bodies.push(body);
+    this.addBlood(body, 0.65);
+    this.event('kill', `${target.name} est éliminé. Le sang restera au sol.`, {
+      player: p.id,
+      f: body.f,
+      x: body.x,
+      z: body.z,
+    });
+  }
+  toggleDrag(p) {
+    if (p.status !== 'free' || p.hidden) return;
+    if (p.dragging) {
+      const b = this.bodies.find((b) => b.id === p.dragging);
+      if (b) b.draggedBy = null;
+      p.dragging = null;
+      this.event('drop', 'Corps déposé. Les traces restent.', { player: p.id });
+      return;
+    }
+    const body = this.bodies
+      .filter(
+        (b) =>
+          !b.draggedBy &&
+          b.f === p.f &&
+          distance(p, b) < 1.9 &&
+          lineClear(p.f, p, b, this.doorStates),
+      )
+      .sort((a, b) => distance(a, p) - distance(b, p))[0];
+    if (body) {
+      body.draggedBy = p.id;
+      p.dragging = body.id;
+      this.event('drag', 'Vous traînez le corps. R pour le déposer.', { player: p.id });
+    }
+  }
+  addBlood(point, size = 0.23) {
+    this.blood.push({
+      id: `blood-${this.eventId++}-${this.blood.length}`,
+      f: point.f,
+      x: point.x,
+      z: point.z,
+      size,
+    });
+  }
+  dragBody(p) {
+    if (!p.dragging) return;
+    const body = this.bodies.find((b) => b.id === p.dragging);
+    if (!body) return;
+    if (p.status !== 'free' || p.hidden) {
+      body.draggedBy = null;
+      p.dragging = null;
+      return;
+    }
+    if (body.f !== p.f) {
+      body.f = p.f;
+      body.x = p.x;
+      body.z = p.z;
+      this.addBlood(body);
+      return;
+    }
+    const d = distance(body, p);
+    if (d < 0.7) return;
+    const old = { ...body },
+      dx = (p.x - body.x) / d,
+      dz = (p.z - body.z) / d;
+    this.move(body, dx * Math.min(0.18, d - 0.65), dz * Math.min(0.18, d - 0.65), 0.2);
+    body.angle = Math.atan2(dx, dz) + Math.PI / 2;
+    const last = body.lastBlood || old;
+    if (distance(body, last) > 0.4) {
+      this.addBlood(body);
+      body.lastBlood = { x: body.x, z: body.z };
+    }
+  }
+  seesEvidence(g, e) {
+    if (g.f !== e.f || distance(g, e) > 6) return false;
+    const a = Math.atan2(e.x - g.x, e.z - g.z),
+      delta = Math.atan2(Math.sin(a - g.angle), Math.cos(a - g.angle));
+    return (
+      (distance(g, e) < 1.3 || Math.abs(delta) < 0.85) && lineClear(g.f, g, e, this.doorStates)
+    );
+  }
+  raiseAlarm(g, e) {
+    if (this.phase !== 'infiltration') return;
+    this.phase = 'playing';
+    this.alarmAt = this.time;
+    for (const other of this.guards)
+      if (other.alive !== false) {
+        other.armed = true;
+        other.state = 'search';
+        other.last = { f: e.f, x: e.x, z: e.z };
+        other.search = 12;
+        other.think = 0;
+        other.goal = null;
+      }
+    this.event(
+      'hunt',
+      this.solo
+        ? 'UN CORPS ! IL EST TOUT SEUL, ON EST ENCORE PLUSIEURS !'
+        : 'UN CORPS ! ILS SONT DEUX ! ON LES CHERCHE !',
+    );
+    this.speak(g, 'Du sang ! Prenez quelque chose, on les cherche !');
+  }
+  updateGuest(g, dt) {
+    g.think -= dt;
+    // A guest must physically see a body or blood; killing alone is not an alarm.
+    const evidence = [...this.bodies, ...this.blood].find((e) => this.seesEvidence(g, e));
+    if (evidence) {
+      this.raiseAlarm(g, evidence);
+      return;
+    }
+    const intruder = this.players.find((p) => this.canSee(g, p));
+    if (intruder) {
+      g.state = 'suspicion';
+      g.last = { f: intruder.f, x: intruder.x, z: intruder.z };
+      g.angle = Math.atan2(intruder.x - g.x, intruder.z - g.z);
+      this.speak(g, 'Tu es invité, toi ?');
+    }
+    if (g.last) {
+      this.navigate(g, g.last, dt, 1.3);
+      if (distance(g, g.last) < 1.5) {
+        g.last = null;
+        g.think = 0;
+      }
+      return;
+    }
+    if (!g.goal || g.think <= 0 || (g.f === g.goal.f && distance(g, g.goal) < 0.8)) {
+      const r = rooms[Math.floor(this.random() * rooms.length)];
+      g.goal = { f: r.f, x: r.x, z: r.z + 3 };
+      g.path = [];
+      g.think = 15 + this.random() * 10;
+      g.state = 'patrol';
+    }
+    this.navigate(g, g.goal, dt, 1.25);
+  }
   capture(g, p) {
+    if (p.dragging) {
+      const body = this.bodies.find((b) => b.id === p.dragging);
+      if (body) body.draggedBy = null;
+      p.dragging = null;
+    }
     p.status = 'captured';
     p.hidden = null;
     p.torch = false;
@@ -375,6 +589,11 @@ export class Simulation {
     );
   }
   updateGuard(g, dt) {
+    if (g.alive === false) return;
+    if (this.phase === 'infiltration') {
+      this.updateGuest(g, dt);
+      return;
+    }
     g.attack = Math.max(0, g.attack - dt);
     g.think -= dt;
     if (g.state === 'escort') {
@@ -411,6 +630,7 @@ export class Simulation {
         );
         for (const ally of this.guards)
           if (
+            ally.alive !== false &&
             ally !== g &&
             ally.f === g.f &&
             distance(g, ally) < 9 &&
@@ -585,18 +805,20 @@ export class Simulation {
     this.move(g, (dx / d) * Math.min(speed * dt, d), (dz / d) * Math.min(speed * dt, d));
   }
   tick(dt) {
-    if (!['intro', 'playing'].includes(this.phase)) return;
+    if (!['intro', 'playing', 'infiltration'].includes(this.phase)) return;
     dt = clamp(dt, 0, 0.1);
     this.time += dt;
     if (this.phase === 'intro' && this.time >= 10) {
       this.phase = 'playing';
       this.event('hunt', 'LES PROIES ONT CHANGÉ DE CAMP. La chasse commence.');
     }
-    if (this.phase === 'playing') this.remaining = Math.max(0, this.remaining - dt);
+    if (this.phase === 'playing' || this.phase === 'infiltration')
+      this.remaining = Math.max(0, this.remaining - dt);
     this.noises = this.noises.filter((n) => this.time - n.at < 2.5);
     this.thrown = this.thrown.filter((n) => this.time - n.at < 3);
     for (const p of this.players) {
       p.invuln = Math.max(0, p.invuln - dt);
+      p.attackCooldown = Math.max(0, (p.attackCooldown || 0) - dt);
       p.noise = Math.max(0, p.noise - dt * 2);
       if (p.status === 'captured') {
         p.bleed -= dt;
@@ -612,13 +834,29 @@ export class Simulation {
       const inp = p.input,
         length = Math.hypot(inp.x || 0, inp.z || 0),
         moving = length > 0.05;
-      const running = inp.run && !inp.crouch && p.stamina > 1 && moving;
+      if (p.opening) {
+        const d = doors.find((d) => d.id === p.opening);
+        if (!d || (!inp.use && this.time - (p.openStarted || 0) > 0.2) || distance(p, d) > 1.9) {
+          p.opening = null;
+          p.openProgress = 0;
+        } else {
+          p.openProgress += dt;
+          if (p.openProgress >= 2) {
+            this.doorStates[d.id] = true;
+            p.opening = null;
+            p.openProgress = 0;
+            p.interactUntil = this.time + 0.7;
+            this.event('door', 'Fenêtre déverrouillée sans bruit.', { player: p.id });
+          }
+        }
+      }
+      const running = !p.dragging && inp.run && !inp.crouch && p.stamina > 1 && moving;
       p.running = running;
       p.crouching = !!inp.crouch;
       p.moving = moving;
       p.stamina = clamp(p.stamina + (running ? -24 : 14) * dt, 0, 100);
       if (moving) {
-        const speed = inp.crouch ? 1.45 : running ? 4.7 : 2.7;
+        const speed = p.dragging ? 1.25 : inp.crouch ? 1.45 : running ? 4.7 : 2.7;
         this.move(
           p,
           (inp.x / Math.max(1, length)) * speed * dt,
@@ -637,6 +875,7 @@ export class Simulation {
           }
         }
       }
+      this.dragBody(p);
       const mate = this.players.find(
         (o) =>
           o.id !== p.id &&
@@ -657,7 +896,14 @@ export class Simulation {
         }
       } else p.rescue = 0;
     }
-    if (this.phase === 'playing') for (const g of this.guards) this.updateGuard(g, dt);
+    if (this.phase === 'playing' || this.phase === 'infiltration')
+      for (const g of this.guards) this.updateGuard(g, dt);
+    if (this.guards.length && this.guards.every((g) => g.alive === false)) {
+      this.phase = 'ended';
+      this.result = 'elimination';
+      this.event('end', 'Tous les invités sont éliminés. La maison est silencieuse.');
+      return;
+    }
     if (this.players.every((p) => p.status !== 'free')) {
       this.phase = 'ended';
       this.result = 'defeat';
@@ -682,6 +928,11 @@ export class Simulation {
   snapshot() {
     return {
       phase: this.phase,
+      scenario: this.scenario,
+      bodies: this.bodies,
+      blood: this.blood,
+      alarmAt: this.alarmAt,
+      living: this.guards.filter((g) => g.alive !== false).length,
       time: this.time,
       remaining: this.remaining,
       duration: this.duration,

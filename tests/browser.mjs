@@ -75,14 +75,19 @@ try {
   console.log('PASS distinct characters synchronize');
   await a.locator('#start').click();
   await Promise.all(
-    pages.map((p) => p.waitForFunction(() => window.__RDS.state?.phase === 'intro')),
+    pages.map((p) => p.waitForFunction(() => window.__RDS.state?.phase === 'infiltration')),
   );
   const id = await a.evaluate(() => window.__RDS.myId),
     getMe = () =>
       a.evaluate(() => window.__RDS.state.players.find((p) => p.id === window.__RDS.myId));
+  await a.keyboard.down('KeyD');
+  await a.waitForFunction(
+    () => window.__RDS.state.players.find((p) => p.id === window.__RDS.myId).x > -19.6,
+  );
+  await a.keyboard.up('KeyD');
   await a.keyboard.press('KeyE');
-  await a.waitForFunction(() => window.__RDS.state.doors['d1-0'] === true);
-  await b.waitForFunction(() => window.__RDS.state.doors['d1-0'] === true);
+  await a.waitForFunction(() => window.__RDS.state.doors['entry-west'] === true);
+  await b.waitForFunction(() => window.__RDS.state.doors['entry-west'] === true);
   console.log('PASS door interaction synchronized');
   const original = await getMe();
   await a.keyboard.down('KeyD');

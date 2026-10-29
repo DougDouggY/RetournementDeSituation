@@ -1,7 +1,7 @@
 // One deterministic collision/interaction map shared by renderer and authority.
 export const FLOORS = ['Sous-sol', 'Rez-de-chaussée', 'Étage'];
 export const NIGHT = 540;
-export const WORLD = { minX: -18, maxX: 18, minZ: -12, maxZ: 12 };
+export const WORLD = { minX: -27, maxX: 27, minZ: -22, maxZ: 22 };
 const layouts = [
   ['Cave à vin', 'Local électrique', 'Buanderie', 'Réserve', 'Archives', 'Chambre froide'],
   ['Salon', 'Salle à manger', 'Cuisine', 'Bureau', 'Salle de bains', 'Garage'],
@@ -43,10 +43,48 @@ function wall(f, x, z, w, d) {
   walls.push({ f, x, z, w, d });
 }
 for (let f = 0; f < 3; f++) {
-  wall(f, 0, -12, 36, 0.25);
-  wall(f, 0, 12, 36, 0.25);
-  wall(f, -18, 0, 0.25, 24);
-  wall(f, 18, 0, 0.25, 24);
+  if (f === 1) {
+    // Real gaps in the outer shell, closed by authoritative door/window colliders.
+    wall(f, -15.5, -12, 5, 0.25);
+    wall(f, 3.5, -12, 29, 0.25);
+    wall(f, -3.5, 12, 29, 0.25);
+    wall(f, 15.5, 12, 5, 0.25);
+    for (const x of [-18, 18]) {
+      wall(f, x, -6.6, 0.25, 10.8);
+      wall(f, x, 6.6, 0.25, 10.8);
+    }
+    doors.push(
+      { id: 'entry-west', f, x: -18, z: 0, w: 0.25, d: 2.4, axis: 'z', exterior: true },
+      { id: 'entry-east', f, x: 18, z: 0, w: 0.25, d: 2.4, axis: 'z', exterior: true },
+      {
+        id: 'window-salon',
+        f,
+        x: -12,
+        z: -12,
+        w: 2,
+        d: 0.25,
+        exterior: true,
+        window: true,
+        room: 'r1-0',
+      },
+      {
+        id: 'window-garage',
+        f,
+        x: 12,
+        z: 12,
+        w: 2,
+        d: 0.25,
+        exterior: true,
+        window: true,
+        room: 'r1-5',
+      },
+    );
+  } else {
+    wall(f, 0, -12, 36, 0.25);
+    wall(f, 0, 12, 36, 0.25);
+    wall(f, -18, 0, 0.25, 24);
+    wall(f, 18, 0, 0.25, 24);
+  }
   for (const x of [-6, 6]) for (const z of [-7, 7]) wall(f, x, z, 0.2, 10);
   for (let row = 0; row < 2; row++)
     for (let col = 0; col < 3; col++) {
@@ -82,7 +120,6 @@ for (let f = 0; f < 3; f++) {
         prop(f, r.id, 'tv', x, z - 3.5, 3, 0.8);
         prop(f, r.id, 'rug', x, z + 1, 7, 5, { solid: false });
         device(f, r.id, 'tv', x, z - 2.7);
-        prop(f, r.id, 'body', x + 3, z - 1.5, 1, 2, { solid: false });
       } else if (r.name === 'Cuisine' || r.name === 'Salle à manger') {
         prop(f, r.id, 'table', x, z, 4, 2.1);
         for (const dx of [-1.3, 1.3])
@@ -123,6 +160,12 @@ for (let f = 0; f < 3; f++) {
     { id: `s${f}-down`, f, x: -16, z: 0, to: f > 0 ? f - 1 : null },
   );
 }
+// Garden furniture also participates in the authoritative collision map.
+prop(1, 'outside', 'sofa', -24, -6, 3, 1.2);
+prop(1, 'outside', 'table', -24, -9, 2, 1.3);
+prop(1, 'outside', 'plant', -20, 5, 1, 1);
+prop(1, 'outside', 'plant', -20, -5, 1, 1);
+prop(1, 'outside', 'boxes', 23, 8, 2, 1.8, { hide: true });
 export function roomAt(f, x, z) {
   return rooms.find((r) => r.f === f && Math.abs(x - r.x) < 6 && Math.abs(z - r.z) < 5);
 }
@@ -133,7 +176,15 @@ export function inside(x, z, b, r = 0) {
   return Math.abs(x - b.x) < b.w / 2 + r && Math.abs(z - b.z) < b.d / 2 + r;
 }
 export function blocked(f, x, z, doorStates = {}, radius = 0.32, ignoreDoors = false) {
-  if (x < -17.6 || x > 17.6 || z < -11.6 || z > 11.6) return true;
+  if (f === 1) {
+    if (
+      x < WORLD.minX + radius ||
+      x > WORLD.maxX - radius ||
+      z < WORLD.minZ + radius ||
+      z > WORLD.maxZ - radius
+    )
+      return true;
+  } else if (x < -17.6 || x > 17.6 || z < -11.6 || z > 11.6) return true;
   return (
     walls.some((w) => w.f === f && inside(x, z, w, radius)) ||
     props.some((p) => p.f === f && p.solid && inside(x, z, p, radius)) ||
@@ -224,4 +275,32 @@ export function pathfind(f, start, end, states = {}) {
     if (!k) return [];
   }
   return result.reverse();
+}
+
+// Visibility is recomputed from the current region, never from explored history.
+export function regionAt(f, x, z) {
+  if (f === 1 && (Math.abs(x) > 18.02 || Math.abs(z) > 12.02)) return 'outside';
+  return roomAt(f, x, z)?.id || `hall${f}`;
+}
+export function visibleRegions(viewer, states = {}) {
+  const current = regionAt(viewer.f, viewer.x, viewer.z),
+    visible = new Set([current]);
+  for (const d of doors) {
+    if (d.f !== viewer.f || !states[d.id] || distance(viewer, d) > 6.5) continue;
+    const normal = d.axis === 'z' ? { x: 1, z: 0 } : { x: 0, z: 1 };
+    const a = regionAt(d.f, d.x + normal.x * 0.7, d.z + normal.z * 0.7),
+      b = regionAt(d.f, d.x - normal.x * 0.7, d.z - normal.z * 0.7);
+    if ((a === current || b === current) && lineClear(viewer.f, viewer, d, states)) {
+      visible.add(a);
+      visible.add(b);
+    }
+  }
+  return visible;
+}
+export function canObserve(viewer, point, states = {}, regions = visibleRegions(viewer, states)) {
+  return (
+    viewer.f === point.f &&
+    regions.has(regionAt(point.f, point.x, point.z)) &&
+    lineClear(point.f, viewer, point, states)
+  );
 }

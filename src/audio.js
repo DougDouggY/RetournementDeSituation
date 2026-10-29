@@ -88,6 +88,10 @@ export class Sound {
       if (e.f !== undefined && (e.f !== me.f || Math.hypot(e.x - me.x, e.z - me.z) > 20)) continue;
       if (e.type === 'voice') this.voice(e.text.replace(/^.*? : /, ''));
       if (e.type === 'intro') this.voice(e.text);
+      if (e.type === 'kill') {
+        this.noise(0.12, 0.18);
+        this.tone(90, 0.2, 0.12, 'triangle', 35);
+      }
       if (e.type === 'noise') {
         this.noise(0.3, 0.3);
         this.tone(320, 0.3, 0.08, 'triangle', 90);

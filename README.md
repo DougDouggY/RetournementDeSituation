@@ -1,6 +1,6 @@
 # Retournement de situation
 
-Un jeu de survie dans le navigateur : un tueur masqué en solo, huit invités qui le chassent et neuf minutes à tenir. DIAG et Swonni sont les deux personnages au choix. Le mode coopératif à deux est conservé pour une étape ultérieure. Première version jouable, en français, avec une maison 3D en coupe sur trois niveaux. Le serveur décide des mouvements, collisions, IA, interactions, captures et résultats. Aucun service d’un autre jeu n’est utilisé.
+Un jeu de survie dans le navigateur : un tueur masqué en solo, huit invités et neuf minutes à tenir. La partie commence dans le jardin : infiltrez la maison et éliminez les invités isolés. La chasse ne commence que lorsqu’un invité voit un corps ou du sang. DIAG et Swonni sont les deux personnages au choix. Le mode coopératif à deux est conservé pour une étape ultérieure. Première version jouable, en français, avec une maison 3D en coupe sur trois niveaux. Le serveur décide des mouvements, collisions, IA, interactions, captures et résultats. Aucun service d’un autre jeu n’est utilisé.
 
 ## Lancer en développement
 
@@ -52,6 +52,9 @@ L’archive `retournement-de-situation-solo.zip` contient le site statique : ell
 | Maj | Courir (endurance limitée, bruit audible) |
 | Ctrl ou C | S’accroupir |
 | E | Porte, cachette, escalier, interrupteur ou objet à proximité |
+| Maintenir E 2 secondes | Déverrouiller discrètement une fenêtre extérieure |
+| Espace | Éliminer un invité isolé à moins de 1,6 m |
+| R | Prendre / déposer un corps à proximité ; déplacements ralentis en le traînant |
 | Maintenir E 2,5 secondes | Détacher un partenaire capturé à proximité |
 | F | Lampe torche |
 | G | Lancer une bouteille vers la souris (trois, rechargeables dans les pièces) |
@@ -60,7 +63,11 @@ L’archive `retournement-de-situation-solo.zip` contient le site statique : ell
 
 Les étiquettes au sol identifient les pièces ; les escaliers sont aux deux extrémités du couloir. Approcher les bouteilles, réveils, télévisions et interrupteurs pour les utiliser. Éteindre la lampe et s’accroupir réduit la détection. Une cachette peut être fouillée : une entrée vue par un poursuivant est particulièrement dangereuse.
 
-Dix secondes d’avance précèdent la chasse. Trois coups entraînent une capture. Un survivant escorte physiquement le prisonnier vers le garage ; son partenaire peut le détacher pendant le trajet ou à destination. Il dispose de **75 secondes** avant l’élimination. Deux joueurs capturés/éliminés mettent fin à la manche. À l’aube : deux joueurs libres = victoire parfaite ; un seul = victoire imparfaite.
+Les tueurs commencent dehors ; les huit invités se déplacent sans armes dans la maison. La porte ouest donne sur le couloir ; la fenêtre nord du salon et celle du garage s’ouvrent en maintenant E deux secondes. Les portes fermées et les murs masquent réellement les pièces voisines. Une porte ouverte révèle une pièce adjacente seulement à proximité et sans obstacle entre le joueur et l’ouverture. La visibilité est recalculée, jamais conservée comme une carte explorée. L’éclairage général est nocturne, avec quelques lampes locales et les torches.
+
+Une élimination exige une cible à portée, sans autre invité vivant à moins de 6 m disposant d’une ligne de vue vers elle. Elle produit un corps et une flaque rouge permanente. R permet de traîner le corps à vitesse réduite, avec une nouvelle trace tous les 40 cm environ ; déposer le corps ne nettoie ni la flaque ni les traces. On ne peut pas se cacher en portant un corps. Un invité doit réellement voir le corps ou le sang pour déclencher l’alarme : les invités vivants s’arment et cherchent d’abord autour des indices, sans connaître automatiquement la position des joueurs. Ils possèdent un champ de vision directionnel, y compris à très courte distance.
+
+Éliminer le dernier invité gagne immédiatement la manche ; survivre jusqu’à l’aube demeure une autre victoire possible. Après l’alarme, Trois coups entraînent une capture. Un survivant escorte physiquement le prisonnier vers le garage ; son partenaire peut le détacher pendant le trajet ou à destination. Il dispose de **75 secondes** avant l’élimination. Deux joueurs capturés/éliminés mettent fin à la manche. À l’aube : deux joueurs libres = victoire parfaite ; un seul = victoire imparfaite.
 
 Une déconnexion suspend la nuit pendant 45 secondes pour permettre la reconnexion. Recharger la page puis rejoindre le même code depuis le même onglet restaure son personnage. Une connexion concurrente avec la même session est refusée. Après le délai, le joueur absent est éliminé ; une panne ou un redémarrage du serveur fait expirer les parties en mémoire.
 
@@ -93,7 +100,7 @@ npx wrangler deploy --dry-run
 
 Le test navigateur utilise `/usr/bin/chromium` par défaut. Définir `CHROMIUM_PATH` si nécessaire, ou installer Chromium et adapter cette variable. Le runner crée son propre serveur de test sur **5174**, exécute une manche complète **raccourcie à 25 secondes**, vérifie les deux clients et ferme ses processus. Le jeu normal conserve neuf minutes. `RDS_NIGHT_SECONDS` est uniquement une surcharge de durée du serveur Node ; elle n’expose aucune commande de triche côté client et ne concerne pas le Worker de production.
 
-Les tests de logique vérifient notamment une nuit simulée entière de neuf minutes, les huit agents sur les trois niveaux, chaque porte/escalier, l’accès aux cachettes, l’occlusion de la vision, l’audition, la poursuite, la capture, le sauvetage et les trois issues. Les tests navigateur vérifient les salons, les rôles, le clavier réel, la synchronisation, la lampe, les bruits, l’interface d’équipe et la reconnexion. Les artefacts des essais sont écrits dans `test-results/`, ignoré par Git. Pour vérifier le Durable Object local, lancer `npm run cf:dev`, puis dans un autre terminal `npm run test:cloudflare`.
+Les 31 tests de logique vérifient notamment deux nuits simulées entières de neuf minutes (infiltration et chasse), les corps, leur déplacement, les traces permanentes, les témoins, le déclenchement physique de l’alarme, les entrées extérieures et le masquage des pièces, les huit agents sur les trois niveaux, chaque porte/escalier, l’accès aux cachettes, l’occlusion de la vision, l’audition, la poursuite, la capture, le sauvetage et les trois issues. Les tests navigateur vérifient les salons, les rôles, le clavier réel, la synchronisation, la lampe, les bruits, l’interface d’équipe et la reconnexion. Les artefacts des essais sont écrits dans `test-results/`, ignoré par Git. Pour vérifier le Durable Object local, lancer `npm run cf:dev`, puis dans un autre terminal `npm run test:cloudflare`.
 
 ## Architecture
 
@@ -112,9 +119,9 @@ La simulation tourne à 20 Hz et diffuse à 10 Hz. Les trajectoires sont interpo
 ## Périmètre et limites de cette version
 
 - Trois niveaux, **18 pièces meublées et trois couloirs**. Les cachettes, portes et escaliers fonctionnent ; le plan n’inclut pas encore toutes les pièces de la liste de conception initiale.
-- Personnages procéduraux articulés, tenues et masques originaux. Marche/course, accroupissement, interaction, blessure, capture, transitions de cachette et pose de victoire sont réalisés par animation procédurale ; pas de motion capture ni de cinématique montée.
+- Personnages procéduraux articulés, tenues et masques originaux. Les invités sont visuellement désarmés avant l’alarme ; leurs armes et lampes apparaissent au début de la chasse. Marche/course, accroupissement, interaction, blessure, capture, transitions de cachette et pose de victoire sont réalisés par animation procédurale ; pas de motion capture ni de cinématique montée.
 - IA à cinq personnalités : vision directionnelle et occultée, audition atténuée, dernière position connue, coordination locale, inspection de cachettes et priorités de secteurs selon l’avancement de la nuit. Pas d’omniscience liée au temps passé caché.
-- L’éclairage influence la portée visuelle par pièce, pas par lecture physique des pixels éclairés. Les étages hors écran continuent d’être simulés. Les murs hauts sont translucides pour conserver la lisibilité.
+- L’éclairage influence la portée visuelle par pièce, pas par lecture physique des pixels éclairés. Les étages hors écran continuent d’être simulés. Les pièces non visibles et leurs habitants/objets disparaissent. Les façades restent opaques depuis le jardin ; les murs hauts deviennent translucides à l’intérieur pour conserver la lisibilité.
 - Bouteilles, TV, alarmes, disjoncteurs, portes bruyantes et accidents de course créent des diversions. Les meubles ne sont pas des corps rigides avec une simulation complète de chute ; aucune destruction physique générale.
 - Sons originaux synthétisés et voix françaises par la synthèse vocale du navigateur, si disponible. Pas de doublage enregistré ni de chat vocal intégré.
 - Optimisations : géométries statiques regroupées, géométries et matériaux réutilisés, éclairages limités et mode sans ombres. Les performances GPU sur les machines des joueurs restent à mesurer ; Chromium logiciel en environnement cloud n’est pas représentatif d’un GPU de jeu.

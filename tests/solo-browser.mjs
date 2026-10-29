@@ -51,11 +51,18 @@ try {
   await page.locator('[data-solo-character="1"]').click();
   await page.locator('#solo').click();
   await page.waitForFunction(() => window.__RDS?.state?.mode === 'solo');
+  await page.waitForFunction(() => window.__RDS.visibleRooms.includes('outside'));
   const state = await page.evaluate(() => window.__RDS.state);
   assert.equal(state.players.length, 1);
   assert.equal(state.players[0].character, 1);
   assert.equal(state.guards.length, 8);
   assert.equal(state.host, 'solo-player');
+  assert.equal(state.phase, 'infiltration');
+  assert.equal(state.bodies.length, 0);
+  assert.ok(state.players[0].x < -18);
+  assert.deepEqual(await page.evaluate(() => window.__RDS.visibleRooms), ['outside']);
+  assert.deepEqual(await page.evaluate(() => window.__RDS.visibleGuards), []);
+  await page.screenshot({ path: 'test-results/infiltration-outside.png' });
   console.log(
     'PASS direct solo launch: Swonni is the only killer; eight hunters; no invitation code',
   );
@@ -69,10 +76,18 @@ try {
   console.log('PASS solo pause and resume');
   await page.keyboard.press('KeyF');
   await page.waitForFunction(() => window.__RDS.state.players[0].torch === true);
+  await page.keyboard.down('KeyD');
+  await page.waitForFunction(() => window.__RDS.state.players[0].x > -19.6);
+  await page.keyboard.up('KeyD');
   await page.keyboard.press('KeyE');
-  await page.waitForFunction(() => window.__RDS.state.doors['d1-0'] === true);
+  await page.waitForFunction(() => window.__RDS.state.doors['entry-west'] === true);
+  await page.waitForFunction(() => window.__RDS.visibleRooms.includes('hall1'));
+  console.log(
+    'PASS exterior start, room fog, blocked house view and reveal through an opened entry',
+  );
   await page.keyboard.press('KeyG');
   await page.waitForFunction(() => window.__RDS.state.players[0].bottles === 2);
+  await page.screenshot({ path: 'test-results/infiltration-entry.png' });
   await page.locator('#hud-settings').click();
   await page.waitForFunction(() => window.__RDS.state.paused === true);
   assert.deepEqual(apiRequests, []);

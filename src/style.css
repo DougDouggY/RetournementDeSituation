@@ -1007,3 +1007,14 @@ dialog p {
 .coop-options .menu-actions {
   margin-top: 12px;
 }
+#objective {
+  display: block;
+  font-size: 8px;
+  color: var(--gold);
+  letter-spacing: 0.8px;
+  margin-bottom: 7px;
+}
+.control-help {
+  max-width: 430px;
+  line-height: 2;
+}

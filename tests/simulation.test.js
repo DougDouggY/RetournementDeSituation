@@ -4,7 +4,7 @@ import { Simulation } from '../shared/simulation.js';
 import { Room, validCode, makeCode, allowedOrigin } from '../server/room.js';
 import { doors, stairs, hides, blocked, pathfind, lineClear, distance } from '../shared/map.js';
 function game(options) {
-  const s = new Simulation(options);
+  const s = new Simulation({ scenario: 'hunt', ...options });
   s.addPlayer('a', 0);
   s.addPlayer('b', 1);
   s.start();
@@ -41,7 +41,7 @@ test('private two-seat rooms, unique characters, only host starts', () => {
     [1, 0],
   );
   r.message(ma, JSON.stringify({ type: 'start' }));
-  assert.equal(r.sim.phase, 'intro');
+  assert.equal(r.sim.phase, 'infiltration');
 });
 test('disconnect pauses, reconnect preserves identity, duplicate rejected', () => {
   const r = new Room('ABC234'),
@@ -114,7 +114,7 @@ test('collisions: exterior, internal walls, doors, furniture', () => {
 test('every door toggles; every functional stair transitions correctly', () => {
   const s = game(),
     p = s.players[0];
-  for (const d of doors) {
+  for (const d of doors.filter((d) => !d.exterior)) {
     Object.assign(p, { f: d.f, x: d.x, z: d.z + (d.z < 0 ? 0.8 : -0.8), hidden: null });
     assert.equal(s.nearby(p)?.kind, 'door', d.id);
     s.interact(p.id);
@@ -292,7 +292,7 @@ test('malformed packets and origins are rejected without crashing authority', ()
   assert.equal(allowedOrigin('https://example.com', 'example.com'), true);
 });
 test('solo has exactly one killer, eight hunters, singular introduction and a proper solo victory', () => {
-  const s = new Simulation({ duration: 0.2 });
+  const s = new Simulation({ duration: 0.2, scenario: 'hunt' });
   s.addPlayer('solo', 1);
   assert.equal(s.start(true), true);
   assert.equal(s.players.length, 1);

@@ -37,10 +37,10 @@ try {
   };
   await wait(() => a.messages.some((m) => m.type === 'state' && m.players.length === 2));
   a.ws.send(JSON.stringify({ type: 'start' }));
-  await wait(() => b.messages.some((m) => m.phase === 'intro'));
+  await wait(() => b.messages.some((m) => m.phase === 'infiltration'));
   const first = a.messages.find((m) => m.type === 'welcome').id;
   a.ws.send(JSON.stringify({ type: 'input', x: 1, z: 0, angle: 1.57 }));
-  await wait(() => b.messages.some((m) => m.players?.find((p) => p.id === first)?.x > -11));
+  await wait(() => b.messages.some((m) => m.players?.find((p) => p.id === first)?.x > -21));
   a.ws.send(JSON.stringify({ type: 'input', x: 0, z: 0 }));
   a.ws.send(JSON.stringify({ type: 'action', action: 'torch' }));
   await wait(() => b.messages.some((m) => m.players?.find((p) => p.id === first)?.torch));

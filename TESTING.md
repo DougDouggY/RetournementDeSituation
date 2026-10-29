@@ -40,3 +40,15 @@ Les rapports détaillés et captures sont générés dans `test-results/` (ignor
 Test navigateur solo réussi (`npm run test:solo`) : Swonni seul, huit chasseurs, sélection depuis l’accueil, pause/reprise et gel de l’horloge, lampe, porte et bouteille. Les appels `/api/**` étaient bloqués par le test : aucun appel API de jeu, aucun WebSocket et aucune erreur JavaScript/WebGL n’ont été observés. La régression à deux navigateurs du mode coopératif conservé passe également après le renommage en Swonni.
 
 La tentative de publication réelle du mode solo a échoué avant toute publication, car Wrangler requiert `CLOUDFLARE_API_TOKEN` dans cet environnement non interactif. L’archive statique est prête pour un téléversement manuel alternatif.
+
+## Infiltration nocturne et retournement après découverte
+
+Les 31 tests de logique passent : 17 contrôles de régression et 14 contrôles d’infiltration. Les deux nuits complètes de neuf minutes exécutées dans la simulation couvrent séparément la chasse et la nouvelle soirée sans alarme. Les huit invités restent physiques sur les trois niveaux, sans traverser les obstacles ni se téléporter hors escaliers.
+
+Vérifications nouvelles : départ solo/coop dehors ; portes extérieures avec collisions réelles ; fenêtres ouvertes par maintien de deux secondes et annulation du maintien ; visibilité limitée à la région actuelle et aux régions directement observables par les portes ouvertes ; fermeture qui remasque ; vision directionnelle même de près ; cible isolée et témoin masqué par un mur ; création du corps et de la flaque ; transport réel, ralentissement, dépose et traces permanentes ; découverte d’un indice visible qui arme les invités et cible l’indice, pas le joueur ; pas d’alarme sur un indice derrière un mur ou dans le dos ; victoire par élimination du dernier invité et par survie ; remise à zéro ; limitation des répliques.
+
+Le test navigateur solo passe avec les API de jeu bloquées : départ dans le jardin avec huit invités, aucun invité rendu à travers les pièces fermées, pause/reprise, déplacement au clavier vers la porte d’entrée, ouverture qui révèle le couloir, lampe et bouteille. Aucun appel API de jeu ni WebSocket, aucune erreur JavaScript/WebGL. Captures inspectées : `test-results/infiltration-outside.png` et `test-results/infiltration-entry.png`. Les éliminations et le transport des corps sont vérifiés par la simulation ; le parcours navigateur ne prétend pas avoir reproduit ces actions manuellement.
+
+La lecture de l’URL publique fournie par l’utilisateur est refusée par le proxy réseau de cet environnement (HTTP CONNECT 403). Cela ne démontre pas une panne du site Cloudflare et empêche de confirmer ici l’activation distante d’une nouvelle version. La vérification locale et la confirmation de l’envoi GitHub sont distinctes du déploiement public.
+
+La régression navigateur coopérative de la version 0.2 passe : deux clients indépendants, départ dans le jardin, entrée ouest synchronisée, mouvement, lampe, bouteille, reconnexion et victoire parfaite à la fin de la manche de test de 25 secondes. Aucune erreur JavaScript ou WebGL. Le solo publié reste à un seul personnage.

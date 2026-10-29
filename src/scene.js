@@ -1,7 +1,18 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { rooms, walls, doors, props, hides, devices, stairs } from '../shared/map.js';
+import {
+  rooms,
+  walls,
+  doors,
+  props,
+  hides,
+  devices,
+  stairs,
+  regionAt,
+  visibleRegions,
+  canObserve,
+} from '../shared/map.js';
 const palettes = [
   { floor: 0x4c5550, wall: 0x61736b },
   { floor: 0x775744, wall: 0x8d9c8a },
@@ -348,8 +359,9 @@ export function character(character = 0, guard = false, index = 0) {
     box(leg, 0, -0.64, 0.08, 0.27, 0.17, 0.4, 0x182326);
     legs.push(leg);
   }
+  let weapon = null;
   if (guard) {
-    const weapon = new THREE.Group();
+    weapon = new THREE.Group();
     arms[1].add(weapon);
     if (index % 3 === 0) {
       const pan = cylinder(weapon, 0, -0.85, 0.1, 0.26, 0.26, 0.08, 0x596663);
@@ -395,16 +407,17 @@ export function character(character = 0, guard = false, index = 0) {
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.045;
   root.add(ring);
-  for (const part of [...arms, ...legs, head]) batchStatic(part);
+  if (weapon) batchStatic(weapon);
+  for (const part of [...arms, ...legs, head]) batchStatic(part, new Set(weapon ? [weapon] : []));
   batchStatic(body, new Set([...arms, ...legs, head]));
-  return { root, body, head, arms, legs, torch, cone, ring, phase: 0, torso };
+  return { root, body, head, arms, legs, torch, cone, ring, phase: 0, torso, weapon };
 }
 export class GameScene {
   constructor(container) {
     this.container = container;
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x12272b);
-    this.scene.fog = new THREE.FogExp2(0x12272b, 0.012);
+    this.scene.background = new THREE.Color(0x010205);
+    this.scene.fog = new THREE.FogExp2(0x010205, 0.012);
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
       powerPreference: 'high-performance',
@@ -414,14 +427,14 @@ export class GameScene {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.25;
+    this.renderer.toneMappingExposure = 1.0;
     container.appendChild(this.renderer.domElement);
     this.camera = new THREE.OrthographicCamera(-14, 14, 10, -10, 0.1, 100);
     this.camera.position.set(0, 27, 17);
     this.camera.lookAt(0, 0, 0);
     this.target = new THREE.Vector3(-12, 0, -5);
-    this.scene.add(new THREE.HemisphereLight(0xbcd9d2, 0x423b35, 2));
-    const moon = new THREE.DirectionalLight(0xc9e6ec, 2.3);
+    this.scene.add(new THREE.HemisphereLight(0x748fa1, 0x080b10, 0.16));
+    const moon = new THREE.DirectionalLight(0x7596ac, 0.2);
     moon.position.set(-12, 28, -12);
     moon.castShadow = true;
     moon.shadow.mapSize.set(1024, 1024);
@@ -442,8 +455,15 @@ export class GameScene {
       this.scene.add(light, light.target);
       return light;
     });
+    this.roomMeshes = new Map();
+    this.wallGroups = [];
+    this.bodyMeshes = new Map();
+    this.exterior = new THREE.Group();
+    this.scene.add(this.exterior);
+    this.roomMeshes.set('outside', this.exterior);
     this.floors = [];
     this.doorMeshes = new Map();
+    this.doorGroups = new Map();
     this.lightMeshes = new Map();
     this.wallMeshes = [];
     this.actors = new Map();
@@ -456,10 +476,12 @@ export class GameScene {
     this.groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     const ground = box(this.scene, 0, -0.45, 0, 95, 0.4, 80, 0x233b39);
     ground.receiveShadow = true;
+    this.ground = ground;
     for (let f = 0; f < 3; f++) this.buildFloor(f);
     // Outside the cutaway: hedges, paving stones, fence and moonlit pines.
-    const exterior = new THREE.Group();
-    this.scene.add(exterior);
+    const exterior = this.exterior;
+    for (let x = -26; x < -18; x += 1.2) box(exterior, x, 0.02, 0, 1, 0.08, 2.4, 0x555d5c);
+    box(exterior, -19, 0.12, 0, 2, 0.25, 3.2, 0x5c6060);
     for (let i = 0; i < 25; i++) {
       const x = -30 + ((i * 17) % 61),
         z = i % 2 ? 18 : -18;
@@ -479,7 +501,24 @@ export class GameScene {
     }
     for (const z of [-15, 15])
       for (const y of [0.3, 0.8]) box(exterior, 0, y, z, 42, 0.08, 0.08, 0x687468);
+    const porchLight = new THREE.PointLight(0xefbe7c, 2.5, 5, 2);
+    porchLight.position.set(-19, 2.2, 0);
+    exterior.add(porchLight);
+    box(exterior, -18.25, 2, 0.9, 0.22, 0.3, 0.25, 0xc4aa6b);
     batchStatic(exterior);
+    this.bloodMesh = new THREE.InstancedMesh(
+      new THREE.CircleGeometry(1, 10),
+      new THREE.MeshBasicMaterial({
+        color: 0x8f171e,
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+      5000,
+    );
+    this.bloodMesh.count = 0;
+    this.scene.add(this.bloodMesh);
     this.previewActors = [character(0), character(1), character(0, true, 0), character(0, true, 1)];
     this.previewActors.forEach((a, i) => {
       a.root.position.set(-12 + i * 1.7, 0, i < 2 ? -4 : -8);
@@ -494,84 +533,121 @@ export class GameScene {
     this.floors.push(group);
     this.scene.add(group);
     group.visible = f === 1;
-    box(group, 0, -0.18, 0, 36.5, 0.35, 24.5, 0x36433f);
-    box(group, 0, 0.005, 0, 35.7, 0.04, 3.8, 0x85765c);
-    for (let i = -17; i < 18; i += 1.5) box(group, i, 0.035, 0, 0.02, 0.005, 3.8, 0x574e40, 0);
+    const base = box(group, 0, -0.18, 0, 36.5, 0.35, 24.5, 0x010205);
+    base.material = new THREE.MeshBasicMaterial({ color: 0x010205 });
+    const hall = new THREE.Group();
+    group.add(hall);
+    this.roomMeshes.set(`hall${f}`, hall);
+    box(hall, 0, 0.005, 0, 35.7, 0.04, 3.8, 0x85765c);
+    for (let i = -17; i < 18; i += 1.5) box(hall, i, 0.035, 0, 0.02, 0.005, 3.8, 0x574e40, 0);
     for (const r of rooms.filter((r) => r.f === f)) {
+      const roomGroup = new THREE.Group();
+      group.add(roomGroup);
+      this.roomMeshes.set(r.id, roomGroup);
       const palette = palettes[r.style];
-      box(group, r.x, -0.015, r.z, 11.8, 0.1, 9.8, palette.floor, 0);
+      box(roomGroup, r.x, -0.015, r.z, 11.8, 0.1, 9.8, palette.floor, 0);
       // Plank seams, tiled bathrooms and a room name integrated into the floor.
       for (let x = r.x - 5.5; x < r.x + 6; x += r.name.includes('bains') ? 1 : 1.2)
-        box(group, x, 0.04, r.z, 0.018, 0.008, 9.8, 0x323e38, 0);
+        box(roomGroup, x, 0.04, r.z, 0.018, 0.008, 9.8, 0x323e38, 0);
       if (r.name.includes('bains'))
         for (let z = r.z - 4.5; z < r.z + 5; z++)
-          box(group, r.x, 0.045, z, 11.8, 0.008, 0.018, 0x455952, 0);
+          box(roomGroup, r.x, 0.045, z, 11.8, 0.008, 0.018, 0x455952, 0);
       const text = label(r.name.toUpperCase());
       text.position.set(r.x, 0.07, r.z + (r.z < 0 ? 3.5 : -3.5));
-      group.add(text);
+      roomGroup.add(text);
       // Framed prints hung on the far walls.
-      box(group, r.x + 2, 1.5, r.z < 0 ? -11.82 : 11.82, 1.2, 0.85, 0.06, 0x413b30);
-      box(group, r.x + 2, 1.5, r.z < 0 ? -11.77 : 11.77, 1.02, 0.65, 0.04, 0x9a8f70);
-      const glow = new THREE.PointLight(0xf1be76, 9, 8, 2);
-      glow.position.set(r.x + 3, 2.5, r.z);
-      group.add(glow);
+      box(roomGroup, r.x + 2, 1.5, r.z < 0 ? -11.82 : 11.82, 1.2, 0.85, 0.06, 0x413b30);
+      box(roomGroup, r.x + 2, 1.5, r.z < 0 ? -11.77 : 11.77, 1.02, 0.65, 0.04, 0x9a8f70);
+      const glow = new THREE.PointLight(0xf1be76, 3.5, 5.5, 2);
+      glow.position.set(r.x + 4.8, 1.65, r.z + 3.6);
+      roomGroup.add(glow);
       this.lightMeshes.set(r.id, glow);
     }
     for (const w of walls.filter((w) => w.f === f)) {
-      box(group, w.x, 0.38, w.z, w.w, 0.75, w.d, 0x7d8c7b, 0.02);
-      const upper = box(group, w.x, 1.55, w.z, w.w, 1.6, w.d, 0x778c80, 0.02);
+      const wallGroup = new THREE.Group();
+      group.add(wallGroup);
+      this.wallGroups.push({ ...w, group: wallGroup });
+      box(wallGroup, w.x, 0.38, w.z, w.w, 0.75, w.d, 0x7d8c7b, 0.02);
+      const upper = box(wallGroup, w.x, 1.55, w.z, w.w, 1.6, w.d, 0x778c80, 0.02);
       upper.material = upper.material.clone();
       upper.material.transparent = true;
       upper.material.opacity = 0.18;
+      wallGroup.userData.upper = upper;
       upper.castShadow = false;
       upper.material.depthWrite = false;
       this.wallMeshes.push(upper);
-      box(group, w.x, 0.79, w.z, w.w + 0.03, 0.09, w.d + 0.03, 0xa7a68c, 0.01);
+      box(wallGroup, w.x, 0.79, w.z, w.w + 0.03, 0.09, w.d + 0.03, 0xa7a68c, 0.01);
     }
     for (const d of doors.filter((d) => d.f === f)) {
+      const doorGroup = new THREE.Group();
+      group.add(doorGroup);
+      this.doorGroups.set(d.id, doorGroup);
       const pivot = new THREE.Group();
-      pivot.position.set(d.x - 1, 0, d.z);
-      group.add(pivot);
-      const leaf = box(pivot, 1, 1, 0, 1.94, 2, 0.13, 0x6a5440);
+      pivot.position.set(d.axis === 'z' ? d.x : d.x - 1, 0, d.axis === 'z' ? d.z + 1 : d.z);
+      pivot.rotation.y = d.axis === 'z' ? Math.PI / 2 : 0;
+      pivot.userData.baseAngle = pivot.rotation.y;
+      doorGroup.add(pivot);
+      const leaf = box(pivot, 1, 1, 0, 1.94, 2, 0.13, d.window ? 0x527e8c : 0x6a5440);
       leaf.material = leaf.material.clone();
       leaf.material.transparent = true;
       leaf.material.opacity = 0.65;
       box(pivot, 1.75, 1, 0.12, 0.12, 0.12, 0.14, 0xc2a166);
-      box(group, d.x - 1.05, 1.1, d.z, 0.12, 2.2, 0.25, 0xa59a7e);
-      box(group, d.x + 1.05, 1.1, d.z, 0.12, 2.2, 0.25, 0xa59a7e);
+      for (const side of [-1, 1])
+        box(
+          doorGroup,
+          d.x + (d.axis === 'z' ? 0 : side * 1.05),
+          1.1,
+          d.z + (d.axis === 'z' ? side * 1.05 : 0),
+          0.12,
+          2.2,
+          0.25,
+          0xa59a7e,
+        );
       this.doorMeshes.set(d.id, pivot);
     }
-    for (const p of props.filter((p) => p.f === f)) group.add(furniture(p));
+    for (const p of props.filter((p) => p.f === f))
+      (this.roomMeshes.get(p.room) || group).add(furniture(p));
     for (const s of stairs.filter((s) => s.f === f && s.to !== null)) {
       for (let j = 0; j < 7; j++)
-        box(group, s.x - 1 + j * 0.3, 0.07 + j * 0.07, s.z, 0.3, 0.12 + j * 0.14, 2.5, 0x7a8276);
+        box(hall, s.x - 1 + j * 0.3, 0.07 + j * 0.07, s.z, 0.3, 0.12 + j * 0.14, 2.5, 0x7a8276);
       const t = label(s.to > f ? '↑ ÉTAGE' : '↓ SOUS-SOL', '#d7c093');
       t.position.set(s.x, 0.8, 0);
-      group.add(t);
+      hall.add(t);
     }
     for (const d of devices.filter((d) => d.f === f)) {
+      const deviceGroup = this.roomMeshes.get(d.room) || group;
       if (d.type === 'light') {
-        box(group, d.x, 0.035, d.z, 0.3, 0.05, 0.3, 0xc8bc86);
+        box(deviceGroup, d.x, 0.035, d.z, 0.3, 0.05, 0.3, 0xc8bc86);
         continue;
       }
       if (d.type === 'bottles') {
         for (let j = 0; j < 3; j++) {
-          cylinder(group, d.x + (j - 1) * 0.16, 0.28, d.z, 0.045, 0.07, 0.4, 0x6a9769);
-          cylinder(group, d.x + (j - 1) * 0.16, 0.52, d.z, 0.026, 0.026, 0.12, 0xa7b290);
+          cylinder(deviceGroup, d.x + (j - 1) * 0.16, 0.28, d.z, 0.045, 0.07, 0.4, 0x6a9769);
+          cylinder(deviceGroup, d.x + (j - 1) * 0.16, 0.52, d.z, 0.026, 0.026, 0.12, 0xa7b290);
         }
       }
       if (d.type === 'alarm') {
-        box(group, d.x, 0.2, d.z, 0.5, 0.4, 0.3, 0xae6e56);
-        sphere(group, d.x, 0.24, d.z + 0.16, 0.14, 0xe2d2aa, 1, 1, 0.2);
+        box(deviceGroup, d.x, 0.2, d.z, 0.5, 0.4, 0.3, 0xae6e56);
+        sphere(deviceGroup, d.x, 0.24, d.z + 0.16, 0.14, 0xe2d2aa, 1, 1, 0.2);
       }
-      if (d.type === 'breaker') box(group, d.x, 1, d.z, 0.65, 1.4, 0.25, 0x5c7269);
+      if (d.type === 'breaker') box(deviceGroup, d.x, 1, d.z, 0.65, 1.4, 0.25, 0x5c7269);
     }
     // Bound chair in the garage, reachable from the doorway.
     if (f === 1) {
-      box(group, 14, 0.5, 9, 0.8, 0.16, 0.8, 0x81654b);
-      box(group, 14, 1, 8.7, 0.8, 1, 0.12, 0x81654b);
+      box(this.roomMeshes.get('r1-5'), 14, 0.5, 9, 0.8, 0.16, 0.8, 0x81654b);
+      box(this.roomMeshes.get('r1-5'), 14, 1, 8.7, 0.8, 1, 0.12, 0x81654b);
     }
-    batchStatic(group, new Set(this.doorMeshes.values()));
+    for (const r of rooms.filter((r) => r.f === f)) batchStatic(this.roomMeshes.get(r.id));
+    batchStatic(hall);
+    for (const w of this.wallGroups.filter((w) => w.f === f)) batchStatic(w.group);
+    batchStatic(
+      group,
+      new Set([
+        ...this.doorGroups.values(),
+        ...this.roomMeshes.values(),
+        ...this.wallGroups.map((w) => w.group),
+      ]),
+    );
   }
   resize() {
     const w = this.container.clientWidth || innerWidth,
@@ -630,6 +706,12 @@ export class GameScene {
     if (p.interactUntil > (this.lastState?.time || 0)) {
       a.arms[1].rotation.x = -1.2 + Math.sin(t * 15) * 0.2;
     }
+    if (p.attackUntil > (this.lastState?.time || 0))
+      a.arms[1].rotation.x = -1.8 + Math.sin(t * 30) * 0.4;
+    if (p.dragging) {
+      a.arms[0].rotation.x = -1.2;
+      a.arms[1].rotation.x = -1.2;
+    }
     const end = this.lastState?.phase === 'ended';
     if (end && this.lastState.result !== 'defeat' && !guard) {
       a.arms[0].rotation.z = -2.4;
@@ -648,9 +730,13 @@ export class GameScene {
     a.body.rotation.x = crouch ? 0.32 : captured ? 0.2 : 0;
     a.body.rotation.z = eliminated ? 1.4 : p.invuln > 1.3 ? Math.sin(t * 40) * 0.1 : 0;
     a.hideAmount = THREE.MathUtils.damp(a.hideAmount || 0, p.hidden ? 1 : 0, 13, dt);
-    a.root.visible = p.f === this.floor && a.hideAmount < 0.98;
+    a.root.visible = p.f === this.floor && a.hideAmount < 0.98 && p.alive !== false;
+    const me = this.viewer;
+    if (me && p.id !== me.id)
+      a.root.visible = a.root.visible && canObserve(me, p, this.lastState.doors, this.visibleRooms);
     a.root.scale.setScalar(1 - a.hideAmount * 0.94);
-    const beam = (guard || p.torch) && !p.hidden;
+    if (a.weapon) a.weapon.visible = p.armed !== false;
+    const beam = (guard ? p.armed !== false : p.torch) && !p.hidden;
     a.torch.visible = beam && (!guard || this.nearLightIds?.has(p.id));
     a.cone.visible = beam;
     a.ring.visible = !guard || p.state === 'chase';
@@ -663,6 +749,8 @@ export class GameScene {
     for (let i = 0; i < this.previewActors.length; i++)
       this.previewActors[i].root.visible = !state && i !== 1;
     const me = state?.players.find((p) => p.id === myId);
+    this.viewer = me;
+    this.visibleRooms = me ? visibleRegions(me, state.doors) : null;
     const f = me?.f ?? 1;
     if (f !== this.floor) {
       this.floor = f;
@@ -670,6 +758,30 @@ export class GameScene {
       setTimeout(() => this.container.classList.remove('floor-change'), 220);
     }
     this.floors.forEach((g, i) => (g.visible = i === this.floor));
+    for (const [id, group] of this.roomMeshes) group.visible = !me || this.visibleRooms.has(id);
+    this.ground.visible = !me || this.visibleRooms.has('outside');
+    for (const w of this.wallGroups) {
+      const side = w.w > w.d ? { x: 0, z: 0.4 } : { x: 0.4, z: 0 };
+      const regions = [
+        regionAt(w.f, w.x + side.x, w.z + side.z),
+        regionAt(w.f, w.x - side.x, w.z - side.z),
+      ];
+      if (w.group.userData.upper)
+        w.group.userData.upper.material.opacity =
+          me && this.visibleRooms.has('outside') && (Math.abs(w.x) > 17.8 || Math.abs(w.z) > 11.8)
+            ? 1
+            : 0.18;
+      w.group.visible = !me || regions.some((r) => this.visibleRooms.has(r));
+    }
+    if (me)
+      for (const d of doors) {
+        const normal = d.axis === 'z' ? { x: 0.7, z: 0 } : { x: 0, z: 0.7 };
+        const visible = [
+          regionAt(d.f, d.x + normal.x, d.z + normal.z),
+          regionAt(d.f, d.x - normal.x, d.z - normal.z),
+        ].some((r) => this.visibleRooms.has(r));
+        this.doorGroups.get(d.id).visible = d.f === this.floor && visible;
+      }
     if (me) this.target.lerp(new THREE.Vector3(me.x, 0, me.z), 1 - Math.exp(-dt * 5));
     else this.target.set(-9, 0, -5);
     this.camera.position.copy(this.target).add(new THREE.Vector3(0, 27, 17));
@@ -677,7 +789,13 @@ export class GameScene {
     if (state) {
       this.nearLightIds = new Set(
         state.guards
-          .filter((g) => g.f === this.floor)
+          .filter(
+            (g) =>
+              g.alive !== false &&
+              g.armed !== false &&
+              g.f === this.floor &&
+              (!me || canObserve(me, g, state.doors, this.visibleRooms)),
+          )
           .sort(
             (a, b) =>
               Math.hypot(a.x - (me?.x || 0), a.z - (me?.z || 0)) -
@@ -703,11 +821,13 @@ export class GameScene {
           a.root.visible = false;
         }
       for (const [id, pivot] of this.doorMeshes) {
-        const angle = state.doors[id] ? Math.PI * 0.48 : 0;
+        const angle = (pivot.userData.baseAngle || 0) + (state.doors[id] ? Math.PI * 0.48 : 0);
         pivot.rotation.y += (angle - pivot.rotation.y) * Math.min(1, dt * 9);
       }
-      for (const [id, light] of this.lightMeshes) light.intensity = state.lights[id] ? 9 : 0.3;
-      for (const noise of state.noises.filter((n) => n.f === this.floor)) {
+      for (const [id, light] of this.lightMeshes) light.intensity = state.lights[id] ? 3.5 : 0;
+      for (const noise of state.noises.filter(
+        (n) => n.f === this.floor && (!me || canObserve(me, n, state.doors, this.visibleRooms)),
+      )) {
         if (!this.effects.some((e) => e.id === noise.id)) {
           const ring = new THREE.Mesh(
             new THREE.RingGeometry(0.97, 1, 40),
@@ -725,6 +845,39 @@ export class GameScene {
         }
       }
     }
+    for (const b of state?.bodies || []) {
+      if (!this.bodyMeshes.has(b.id)) {
+        const actor = character(0, true, b.index);
+        if (actor.weapon) actor.weapon.visible = false;
+        actor.torch.visible = false;
+        actor.cone.visible = false;
+        actor.ring.visible = false;
+        actor.body.rotation.z = Math.PI / 2;
+        actor.root.position.y = 0.25;
+        this.scene.add(actor.root);
+        this.bodyMeshes.set(b.id, actor);
+      }
+      const actor = this.bodyMeshes.get(b.id);
+      actor.root.position.set(b.x, 0.28, b.z);
+      actor.root.rotation.y = b.angle;
+      actor.root.visible = !!me && canObserve(me, b, state.doors, this.visibleRooms);
+    }
+    for (const [id, actor] of this.bodyMeshes)
+      if (!state?.bodies?.some((b) => b.id === id)) actor.root.visible = false;
+    let bloodCount = 0;
+    const stamp = new THREE.Object3D();
+    for (const mark of state?.blood || []) {
+      if (bloodCount >= 5000 || !me || !canObserve(me, mark, state.doors, this.visibleRooms))
+        continue;
+      stamp.position.set(mark.x, 0.085, mark.z);
+      stamp.rotation.set(-Math.PI / 2, 0, 0);
+      stamp.scale.set(mark.size, mark.size * 0.7, 1);
+      stamp.updateMatrix();
+      this.bloodMesh.setMatrixAt(bloodCount++, stamp.matrix);
+    }
+    this.bloodMesh.count = bloodCount;
+    this.bloodMesh.instanceMatrix.needsUpdate = true;
+    this.bloodMesh.frustumCulled = false;
     const flyingIds = new Set();
     for (const b of state?.thrown || []) {
       flyingIds.add(b.id);
@@ -743,7 +896,8 @@ export class GameScene {
         THREE.MathUtils.lerp(b.fromZ, b.z, t),
       );
       mesh.rotation.z = t * 8;
-      mesh.visible = b.f === this.floor;
+      mesh.visible =
+        b.f === this.floor && (!me || canObserve(me, b, state.doors, this.visibleRooms));
     }
     for (const [id, mesh] of this.projectiles)
       if (!flyingIds.has(id)) {

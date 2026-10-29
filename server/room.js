@@ -76,7 +76,7 @@ export class Room {
     }
     if (!m || typeof m !== 'object' || Array.isArray(m)) return;
     if (m.type === 'input') this.sim.setInput(member.id, m);
-    if (m.type === 'action' && ['interact', 'torch', 'throw'].includes(m.action))
+    if (m.type === 'action' && ['interact', 'torch', 'throw', 'attack', 'drag'].includes(m.action))
       this.sim.action(member.id, m.action);
     if (m.type === 'character' && this.sim.phase === 'lobby' && [0, 1].includes(m.character)) {
       const p = this.sim.players.find((p) => p.id === member.id),
@@ -103,7 +103,7 @@ export class Room {
           if (p) p.status = 'eliminated';
         }
       }
-    this.paused = waiting && ['playing', 'intro'].includes(this.sim.phase);
+    this.paused = waiting && ['playing', 'intro', 'infiltration'].includes(this.sim.phase);
     if (!this.paused) this.sim.tick(dt);
     if (now - this.broadcastAt >= 100) {
       this.broadcastAt = now;
