@@ -76,7 +76,10 @@ export class Room {
     }
     if (!m || typeof m !== 'object' || Array.isArray(m)) return;
     if (m.type === 'input') this.sim.setInput(member.id, m);
-    if (m.type === 'action' && ['interact', 'torch', 'throw', 'attack', 'drag'].includes(m.action))
+    if (
+      m.type === 'action' &&
+      ['interact', 'torch', 'throw', 'attack', 'drag', 'climb'].includes(m.action)
+    )
       this.sim.action(member.id, m.action);
     if (m.type === 'character' && this.sim.phase === 'lobby' && [0, 1].includes(m.character)) {
       const p = this.sim.players.find((p) => p.id === member.id),

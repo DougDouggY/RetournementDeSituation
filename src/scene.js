@@ -12,6 +12,8 @@ import {
   regionAt,
   visibleRegions,
   canObserve,
+  gardenLamps,
+  windowNormal,
 } from '../shared/map.js';
 const palettes = [
   { floor: 0x4c5550, wall: 0x61736b },
@@ -88,6 +90,35 @@ function label(text, color = '#c5cbc1', size = 128) {
   );
   m.rotation.x = -Math.PI / 2;
   return m;
+}
+let glowTexture;
+function lightPool(parent, x, z, w, d, color = 0xf0bd6b) {
+  if (!glowTexture) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const ctx = c.getContext('2d'),
+      g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    g.addColorStop(0, 'rgba(255,255,255,.7)');
+    g.addColorStop(0.45, 'rgba(255,255,255,.3)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 128, 128);
+    glowTexture = new THREE.CanvasTexture(c);
+  }
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, d),
+    new THREE.MeshBasicMaterial({
+      map: glowTexture,
+      color,
+      transparent: true,
+      opacity: 0.5,
+      depthWrite: false,
+    }),
+  );
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.set(x, 0.07, z);
+  parent.add(mesh);
+  return mesh;
 }
 function batchStatic(group, exclude = new Set()) {
   group.updateMatrixWorld(true);
@@ -427,7 +458,7 @@ export class GameScene {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.0;
+    this.renderer.toneMappingExposure = 1.05;
     container.appendChild(this.renderer.domElement);
     this.camera = new THREE.OrthographicCamera(-14, 14, 10, -10, 0.1, 100);
     this.camera.position.set(0, 27, 17);
@@ -465,6 +496,10 @@ export class GameScene {
     this.doorMeshes = new Map();
     this.doorGroups = new Map();
     this.lightMeshes = new Map();
+    this.windowGlass = new Map();
+    this.windowPools = new Map();
+    this.gardenFixtures = [];
+    this.gardenLights = [];
     this.wallMeshes = [];
     this.actors = new Map();
     this.effects = [];
@@ -501,11 +536,46 @@ export class GameScene {
     }
     for (const z of [-15, 15])
       for (const y of [0.3, 0.8]) box(exterior, 0, y, z, 42, 0.08, 0.08, 0x687468);
+    for (const p of gardenLamps) {
+      cylinder(exterior, p.x, 0.32, p.z, 0.055, 0.075, 0.64, 0x34413f);
+      const glass = cylinder(exterior, p.x, 0.68, p.z, 0.12, 0.12, 0.2, 0xf9e0a8);
+      glass.material = new THREE.MeshStandardMaterial({
+        color: 0xf6dda8,
+        emissive: 0xffcb70,
+        emissiveIntensity: 1,
+      });
+      cylinder(exterior, p.x, 0.82, p.z, 0.17, 0.15, 0.06, 0x34413f);
+      const pool = lightPool(exterior, p.x, p.z, 3, 3);
+      this.gardenFixtures.push({ glass, pool });
+    }
+    for (const x of [-25, -22, -19]) {
+      const light = new THREE.PointLight(0xffd095, 5, 5, 2);
+      light.position.set(x, 0.85, 0);
+      exterior.add(light);
+      this.gardenLights.push(light);
+    }
     const porchLight = new THREE.PointLight(0xefbe7c, 2.5, 5, 2);
     porchLight.position.set(-19, 2.2, 0);
     exterior.add(porchLight);
+    this.gardenLights.push(porchLight);
     box(exterior, -18.25, 2, 0.9, 0.22, 0.3, 0.25, 0xc4aa6b);
-    batchStatic(exterior);
+    for (const d of doors.filter((d) => d.window)) {
+      const n = windowNormal(d),
+        pool = lightPool(
+          exterior,
+          d.x + n.x * 1.8,
+          d.z + n.z * 1.8,
+          d.axis === 'z' ? 4 : 3.2,
+          d.axis === 'z' ? 3.2 : 4,
+        );
+      this.windowPools.set(d.id, { mesh: pool, room: d.room });
+    }
+    this.windowLights = Array.from({ length: 2 }, () => {
+      const light = new THREE.PointLight(0xffce88, 0, 5, 2);
+      this.scene.add(light);
+      return light;
+    });
+    batchStatic(exterior, new Set(this.gardenFixtures.map((f) => f.glass)));
     this.bloodMesh = new THREE.InstancedMesh(
       new THREE.CircleGeometry(1, 10),
       new THREE.MeshBasicMaterial({
@@ -545,21 +615,22 @@ export class GameScene {
       group.add(roomGroup);
       this.roomMeshes.set(r.id, roomGroup);
       const palette = palettes[r.style];
-      box(roomGroup, r.x, -0.015, r.z, 11.8, 0.1, 9.8, palette.floor, 0);
+      box(roomGroup, r.x, -0.015, r.z, r.w - 0.2, 0.1, r.d - 0.2, palette.floor, 0);
       // Plank seams, tiled bathrooms and a room name integrated into the floor.
-      for (let x = r.x - 5.5; x < r.x + 6; x += r.name.includes('bains') ? 1 : 1.2)
-        box(roomGroup, x, 0.04, r.z, 0.018, 0.008, 9.8, 0x323e38, 0);
+      for (let x = r.x - r.w / 2 + 0.5; x < r.x + r.w / 2; x += r.name.includes('bains') ? 1 : 1.2)
+        box(roomGroup, x, 0.04, r.z, 0.018, 0.008, r.d - 0.2, 0x323e38, 0);
       if (r.name.includes('bains'))
-        for (let z = r.z - 4.5; z < r.z + 5; z++)
-          box(roomGroup, r.x, 0.045, z, 11.8, 0.008, 0.018, 0x455952, 0);
+        for (let z = r.z - r.d / 2 + 0.5; z < r.z + r.d / 2; z++)
+          box(roomGroup, r.x, 0.045, z, r.w - 0.2, 0.008, 0.018, 0x455952, 0);
       const text = label(r.name.toUpperCase());
       text.position.set(r.x, 0.07, r.z + (r.z < 0 ? 3.5 : -3.5));
       roomGroup.add(text);
       // Framed prints hung on the far walls.
       box(roomGroup, r.x + 2, 1.5, r.z < 0 ? -11.82 : 11.82, 1.2, 0.85, 0.06, 0x413b30);
       box(roomGroup, r.x + 2, 1.5, r.z < 0 ? -11.77 : 11.77, 1.02, 0.65, 0.04, 0x9a8f70);
-      const glow = new THREE.PointLight(0xf1be76, 3.5, 5.5, 2);
-      glow.position.set(r.x + 4.8, 1.65, r.z + 3.6);
+      const glow = new THREE.PointLight(0xffdab2, 22, Math.max(r.w, r.d) + 3, 2);
+      glow.position.set(r.x, 3, r.z);
+      cylinder(roomGroup, r.x, 2.8, r.z, 0.32, 0.4, 0.12, 0xeadab7);
       roomGroup.add(glow);
       this.lightMeshes.set(r.id, glow);
     }
@@ -587,22 +658,49 @@ export class GameScene {
       pivot.rotation.y = d.axis === 'z' ? Math.PI / 2 : 0;
       pivot.userData.baseAngle = pivot.rotation.y;
       doorGroup.add(pivot);
-      const leaf = box(pivot, 1, 1, 0, 1.94, 2, 0.13, d.window ? 0x527e8c : 0x6a5440);
-      leaf.material = leaf.material.clone();
-      leaf.material.transparent = true;
-      leaf.material.opacity = 0.65;
-      box(pivot, 1.75, 1, 0.12, 0.12, 0.12, 0.14, 0xc2a166);
-      for (const side of [-1, 1])
-        box(
+      if (d.window) {
+        const pane = box(pivot, 1, 1.5, 0, 1.92, 1.3, 0.045, 0x9cbbb8);
+        pane.material = new THREE.MeshStandardMaterial({
+          color: 0xb6d5ce,
+          emissive: 0xffd195,
+          emissiveIntensity: 0.65,
+          roughness: 0.18,
+          transparent: true,
+          opacity: 0.42,
+          depthWrite: false,
+        });
+        this.windowGlass.set(d.id, { mesh: pane, room: d.room });
+        for (const x of [0, 1, 2]) box(pivot, x, 1.5, 0.02, 0.065, 1.42, 0.08, 0xb8af96);
+        for (const y of [0.8, 1.5, 2.2]) box(pivot, 1, y, 0.02, 2.08, 0.065, 0.08, 0xb8af96);
+        const base = box(
           doorGroup,
-          d.x + (d.axis === 'z' ? 0 : side * 1.05),
-          1.1,
-          d.z + (d.axis === 'z' ? side * 1.05 : 0),
-          0.12,
-          2.2,
-          0.25,
-          0xa59a7e,
+          d.x,
+          0.35,
+          d.z,
+          d.axis === 'z' ? 0.24 : 2.08,
+          0.7,
+          d.axis === 'z' ? 2.08 : 0.24,
+          0x7d8c7b,
         );
+        box(pivot, 1, 0.74, 0.1, 2.16, 0.12, 0.32, 0xc0b69a);
+      } else {
+        const leaf = box(pivot, 1, 1, 0, 1.94, 2, 0.13, 0x6a5440);
+        leaf.material = leaf.material.clone();
+        leaf.material.transparent = true;
+        leaf.material.opacity = 0.85;
+        box(pivot, 1.75, 1, 0.12, 0.12, 0.12, 0.14, 0xc2a166);
+        for (const side of [-1, 1])
+          box(
+            doorGroup,
+            d.x + (d.axis === 'z' ? 0 : side * 1.05),
+            1.1,
+            d.z + (d.axis === 'z' ? side * 1.05 : 0),
+            0.12,
+            2.2,
+            0.25,
+            0xa59a7e,
+          );
+      }
       this.doorMeshes.set(d.id, pivot);
     }
     for (const p of props.filter((p) => p.f === f))
@@ -680,7 +778,7 @@ export class GameScene {
     this.resize();
   }
   animateActor(a, p, dt, t, guard = false) {
-    const target = new THREE.Vector3(p.x, 0, p.z);
+    const target = new THREE.Vector3(p.x, p.climbHeight || 0, p.z);
     const previous = a.root.position.clone();
     a.root.position.lerp(target, Math.min(1, dt * 16));
     const speed = previous.distanceTo(a.root.position) / Math.max(dt, 0.001);
@@ -712,6 +810,11 @@ export class GameScene {
       a.arms[0].rotation.x = -1.2;
       a.arms[1].rotation.x = -1.2;
     }
+    if (p.climb) {
+      a.body.position.y = 0;
+      a.arms[0].rotation.x = -1.7;
+      a.arms[1].rotation.x = -1.7;
+    }
     const end = this.lastState?.phase === 'ended';
     if (end && this.lastState.result !== 'defeat' && !guard) {
       a.arms[0].rotation.z = -2.4;
@@ -727,7 +830,8 @@ export class GameScene {
         : speed > 0.2
           ? Math.abs(Math.sin(a.phase)) * 0.06
           : Math.sin(t * 2) * 0.02;
-    a.body.rotation.x = crouch ? 0.32 : captured ? 0.2 : 0;
+    if (p.climb) a.body.position.y = 0;
+    a.body.rotation.x = p.climb ? 0.5 : crouch ? 0.32 : captured ? 0.2 : 0;
     a.body.rotation.z = eliminated ? 1.4 : p.invuln > 1.3 ? Math.sin(t * 40) * 0.1 : 0;
     a.hideAmount = THREE.MathUtils.damp(a.hideAmount || 0, p.hidden ? 1 : 0, 13, dt);
     a.root.visible = p.f === this.floor && a.hideAmount < 0.98 && p.alive !== false;
@@ -768,7 +872,10 @@ export class GameScene {
       ];
       if (w.group.userData.upper)
         w.group.userData.upper.material.opacity =
-          me && this.visibleRooms.has('outside') && (Math.abs(w.x) > 17.8 || Math.abs(w.z) > 11.8)
+          me &&
+          this.visibleRooms.has('outside') &&
+          !regions.some((r) => r !== 'outside' && this.visibleRooms.has(r)) &&
+          (Math.abs(w.x) > 17.8 || Math.abs(w.z) > 11.8)
             ? 1
             : 0.18;
       w.group.visible = !me || regions.some((r) => this.visibleRooms.has(r));
@@ -824,7 +931,8 @@ export class GameScene {
         const angle = (pivot.userData.baseAngle || 0) + (state.doors[id] ? Math.PI * 0.48 : 0);
         pivot.rotation.y += (angle - pivot.rotation.y) * Math.min(1, dt * 9);
       }
-      for (const [id, light] of this.lightMeshes) light.intensity = state.lights[id] ? 3.5 : 0;
+      for (const [id, light] of this.lightMeshes)
+        light.intensity = state.power !== false && state.lights[id] ? 22 : 0;
       for (const noise of state.noises.filter(
         (n) => n.f === this.floor && (!me || canObserve(me, n, state.doors, this.visibleRooms)),
       )) {
@@ -915,6 +1023,41 @@ export class GameScene {
         e.mesh.geometry.dispose();
         e.mesh.material.dispose();
         this.effects.splice(i, 1);
+      }
+    }
+    const power = state?.power !== false;
+    for (const light of this.gardenLights)
+      light.intensity = power ? (light === this.gardenLights.at(-1) ? 2.5 : 5) : 0;
+    for (const fixture of this.gardenFixtures) {
+      fixture.glass.material.emissiveIntensity = power ? 1 : 0;
+      fixture.pool.visible = power;
+    }
+    for (const [id, glass] of this.windowGlass) {
+      const on = power && (!state || state.lights[glass.room]);
+      glass.mesh.material.emissiveIntensity = on ? 0.65 : 0;
+      glass.mesh.material.color.setHex(on ? 0xb6d5ce : 0x344b51);
+      this.windowPools.get(id).mesh.visible = !!on;
+    }
+    const glowingWindows = doors
+      .filter(
+        (d) =>
+          d.window &&
+          power &&
+          (!state || state.lights[d.room]) &&
+          (!me || this.visibleRooms.has('outside')),
+      )
+      .sort(
+        (a, b) =>
+          Math.hypot(a.x - (me?.x || -22), a.z - (me?.z || 0)) -
+          Math.hypot(b.x - (me?.x || -22), b.z - (me?.z || 0)),
+      );
+    for (let i = 0; i < this.windowLights.length; i++) {
+      const light = this.windowLights[i],
+        d = glowingWindows[i];
+      light.intensity = d ? 4 : 0;
+      if (d) {
+        const n = windowNormal(d);
+        light.position.set(d.x + n.x * 0.7, 1.1, d.z + n.z * 0.7);
       }
     }
     const lightSources =

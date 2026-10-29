@@ -77,19 +77,22 @@ test('windows require two seconds of continuous use; cancelling does not open th
   advance(s, 2.1);
   assert.equal(s.doorStates['window-salon'], true);
   s.move(p, 0, 2);
+  assert.equal(regionAt(p.f, p.x, p.z), 'outside');
+  s.action(p.id, 'climb');
+  advance(s, 1);
   assert.equal(regionAt(p.f, p.x, p.z), 'r1-0');
 });
 test('visibility is current-room only, open nearby doors reveal adjacent rooms, closing removes visibility', () => {
-  const p = { f: 1, x: -12, z: -3 },
+  const p = { f: 1, x: -10, z: -3 },
     state = {};
   let visible = visibleRegions(p, state);
   assert.deepEqual([...visible], ['r1-0']);
-  assert.equal(canObserve(p, { f: 1, x: -12, z: 0 }, state), false);
+  assert.equal(canObserve(p, { f: 1, x: -10, z: 0 }, state), false);
   state['d1-0'] = true;
   visible = visibleRegions(p, state);
   assert.ok(visible.has('hall1'));
   assert.equal(visible.has('r1-1'), false);
-  assert.equal(canObserve(p, { f: 1, x: -12, z: 0 }, state), true);
+  assert.equal(canObserve(p, { f: 1, x: -10, z: 0 }, state), true);
   state['d1-0'] = false;
   assert.equal(visibleRegions(p, state).has('hall1'), false);
   const outside = { f: 1, x: -19, z: 0 };
@@ -107,7 +110,7 @@ test('guests do not see behind themselves even at close distance, or through clo
   p.z = 1;
   assert.equal(s.canSee(g, p), true);
   Object.assign(g, { x: -12, z: 0, angle: Math.PI });
-  Object.assign(p, { x: -12, z: -3 });
+  Object.assign(p, { x: -10, z: -3 });
   assert.equal(s.canSee(g, p), false);
   s.doorStates['d1-0'] = true;
   assert.equal(s.canSee(g, p), true);
@@ -131,9 +134,9 @@ test('nearby witnesses prevent an isolated elimination, but a wall screens a wit
   assert.equal(g.alive, true);
   assert.equal(s.bodies.length, 0);
   assert.ok(s.events.some((e) => e.type === 'warning'));
-  Object.assign(p, { x: -8, z: -4 });
-  Object.assign(g, { x: -7, z: -4 });
-  Object.assign(other, { x: -5, z: -4 });
+  Object.assign(p, { x: -4, z: -4 });
+  Object.assign(g, { x: -3, z: -4 });
+  Object.assign(other, { x: -1, z: -4 });
   assert.equal(lineClear(1, g, other, s.doorStates), false);
   s.action(p.id, 'attack');
   assert.equal(g.alive, false);
@@ -184,8 +187,8 @@ test('evidence behind a wall or behind the guest does not raise alarm', () => {
   assert.ok(s.bodies.every((b) => !s.seesEvidence(other, b)));
   s.updateGuard(other, 0.05);
   assert.equal(s.phase, 'infiltration');
-  Object.assign(other, { x: -5, z: -4, angle: -Math.PI / 2 });
-  s.bodies[0].x = -7;
+  Object.assign(other, { x: -1, z: -4, angle: -Math.PI / 2 });
+  s.bodies[0].x = -3;
   s.bodies[0].z = -4;
   s.blood = [];
   assert.equal(s.seesEvidence(other, s.bodies[0]), false);

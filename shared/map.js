@@ -21,8 +21,105 @@ export const rooms = [],
   hides = [],
   devices = [],
   stairs = [];
+// Each floor and each side of the hall has its own partitions.
+const partitions = [
+  [
+    [-18, -6, 2, 18],
+    [-18, -10, 6, 18],
+  ],
+  [
+    [-18, -2, 8, 18],
+    [-18, -8, 0, 18],
+  ],
+  [
+    [-18, -4, 4, 18],
+    [-18, -9, 0, 18],
+  ],
+];
+export const gardenLamps = [-25, -22, -19].flatMap((x) => [-1.8, 1.8].map((z) => ({ x, z })));
+const portals = [
+  { id: 'entry-west', f: 1, x: -18, z: 0, w: 0.25, d: 2.4, axis: 'z', exterior: true },
+  { id: 'entry-east', f: 1, x: 18, z: 0, w: 0.25, d: 2.4, axis: 'z', exterior: true },
+  {
+    id: 'window-salon',
+    f: 1,
+    x: -12,
+    z: -12,
+    w: 2,
+    d: 0.25,
+    window: true,
+    exterior: true,
+    room: 'r1-0',
+  },
+  {
+    id: 'window-dining',
+    f: 1,
+    x: 3,
+    z: -12,
+    w: 2,
+    d: 0.25,
+    window: true,
+    exterior: true,
+    room: 'r1-1',
+  },
+  {
+    id: 'window-kitchen',
+    f: 1,
+    x: 18,
+    z: -7,
+    w: 0.25,
+    d: 2,
+    axis: 'z',
+    window: true,
+    exterior: true,
+    room: 'r1-2',
+  },
+  {
+    id: 'window-office',
+    f: 1,
+    x: -18,
+    z: 7,
+    w: 0.25,
+    d: 2,
+    axis: 'z',
+    window: true,
+    exterior: true,
+    room: 'r1-3',
+  },
+  {
+    id: 'window-bathroom',
+    f: 1,
+    x: -4,
+    z: 12,
+    w: 2,
+    d: 0.25,
+    window: true,
+    exterior: true,
+    room: 'r1-4',
+  },
+  {
+    id: 'window-garage',
+    f: 1,
+    x: 12,
+    z: 12,
+    w: 2,
+    d: 0.25,
+    window: true,
+    exterior: true,
+    room: 'r1-5',
+  },
+];
 let id = 0;
 function prop(f, room, type, x, z, w, d, options = {}) {
+  const r = rooms.find((r) => r.id === room);
+  if (r) {
+    const sx = r.w / 12,
+      sz = r.d / 10;
+    x = r.x + (x - r.x) * sx;
+    z = r.z + (z - r.z) * sz;
+    w *= sx;
+    d *= sz;
+  }
   const p = { id: `p${id++}`, f, room, type, x, z, w, d, solid: true, ...options };
   props.push(p);
   if (options.hide)
@@ -37,58 +134,53 @@ function prop(f, room, type, x, z, w, d, options = {}) {
   return p;
 }
 function device(f, room, type, x, z) {
+  const r = rooms.find((r) => r.id === room);
+  if (r) {
+    x = r.x + ((x - r.x) * r.w) / 12;
+    z = r.z + ((z - r.z) * r.d) / 10;
+  }
   devices.push({ id: `v${id++}`, f, room, type, x, z });
 }
 function wall(f, x, z, w, d) {
   walls.push({ f, x, z, w, d });
 }
 for (let f = 0; f < 3; f++) {
-  if (f === 1) {
-    // Real gaps in the outer shell, closed by authoritative door/window colliders.
-    wall(f, -15.5, -12, 5, 0.25);
-    wall(f, 3.5, -12, 29, 0.25);
-    wall(f, -3.5, 12, 29, 0.25);
-    wall(f, 15.5, 12, 5, 0.25);
-    for (const x of [-18, 18]) {
-      wall(f, x, -6.6, 0.25, 10.8);
-      wall(f, x, 6.6, 0.25, 10.8);
+  for (const [axis, constant] of [
+    ['x', -12],
+    ['x', 12],
+    ['z', -18],
+    ['z', 18],
+  ]) {
+    const horizontal = axis === 'x',
+      min = horizontal ? -18 : -12,
+      max = horizontal ? 18 : 12;
+    const gaps =
+      f === 1
+        ? portals
+            .filter((d) => (horizontal ? d.z === constant : d.x === constant))
+            .sort((a, b) => (horizontal ? a.x - b.x : a.z - b.z))
+        : [];
+    let start = min;
+    for (const d of [...gaps, null]) {
+      const end = d ? (horizontal ? d.x - d.w / 2 : d.z - d.d / 2) : max;
+      if (end > start)
+        wall(
+          f,
+          horizontal ? (start + end) / 2 : constant,
+          horizontal ? constant : (start + end) / 2,
+          horizontal ? end - start : 0.25,
+          horizontal ? 0.25 : end - start,
+        );
+      if (d) start = horizontal ? d.x + d.w / 2 : d.z + d.d / 2;
     }
-    doors.push(
-      { id: 'entry-west', f, x: -18, z: 0, w: 0.25, d: 2.4, axis: 'z', exterior: true },
-      { id: 'entry-east', f, x: 18, z: 0, w: 0.25, d: 2.4, axis: 'z', exterior: true },
-      {
-        id: 'window-salon',
-        f,
-        x: -12,
-        z: -12,
-        w: 2,
-        d: 0.25,
-        exterior: true,
-        window: true,
-        room: 'r1-0',
-      },
-      {
-        id: 'window-garage',
-        f,
-        x: 12,
-        z: 12,
-        w: 2,
-        d: 0.25,
-        exterior: true,
-        window: true,
-        room: 'r1-5',
-      },
-    );
-  } else {
-    wall(f, 0, -12, 36, 0.25);
-    wall(f, 0, 12, 36, 0.25);
-    wall(f, -18, 0, 0.25, 24);
-    wall(f, 18, 0, 0.25, 24);
   }
-  for (const x of [-6, 6]) for (const z of [-7, 7]) wall(f, x, z, 0.2, 10);
+  if (f === 1) doors.push(...portals);
   for (let row = 0; row < 2; row++)
     for (let col = 0; col < 3; col++) {
-      const x = -12 + col * 12,
+      const edges = partitions[f][row],
+        left = edges[col],
+        right = edges[col + 1];
+      const x = (left + right) / 2,
         z = row ? 7 : -7,
         index = row * 3 + col;
       const r = {
@@ -96,15 +188,16 @@ for (let f = 0; f < 3; f++) {
         f,
         x,
         z,
-        w: 12,
+        w: right - left,
         d: 10,
         name: layouts[f][index],
         style: (f * 2 + index) % 6,
       };
       rooms.push(r);
       const boundary = row ? 2 : -2;
-      wall(f, x - 3.5, boundary, 5, 0.2);
-      wall(f, x + 3.5, boundary, 5, 0.2);
+      if (col > 0) wall(f, left, z, 0.2, 10);
+      wall(f, (left + x - 1) / 2, boundary, x - 1 - left, 0.2);
+      wall(f, (x + 1 + right) / 2, boundary, right - x - 1, 0.2);
       doors.push({ id: `d${f}-${index}`, f, x, z: boundary, w: 2, d: 0.22, room: r.id });
       device(f, r.id, 'light', x - 2, boundary + (row ? 0.8 : -0.8));
       if (r.name.includes('Chambre') && !r.name.includes('froide')) {
@@ -117,14 +210,14 @@ for (let f = 0; f < 3; f++) {
         prop(f, r.id, 'sofa', x - 2, z, 3.8, 1.5, { hide: true });
         prop(f, r.id, 'sofa', x + 3, z + 2, 1.5, 3);
         prop(f, r.id, 'table', x, z + 1.4, 2, 1.3);
-        prop(f, r.id, 'tv', x, z - 3.5, 3, 0.8);
+        prop(f, r.id, 'tv', x, z - 3, 3, 0.8);
         prop(f, r.id, 'rug', x, z + 1, 7, 5, { solid: false });
         device(f, r.id, 'tv', x, z - 2.7);
       } else if (r.name === 'Cuisine' || r.name === 'Salle à manger') {
         prop(f, r.id, 'table', x, z, 4, 2.1);
         for (const dx of [-1.3, 1.3])
           for (const dz of [-1.8, 1.8]) prop(f, r.id, 'chair', x + dx, z + dz, 0.8, 0.8);
-        prop(f, r.id, 'counter', x, z - 4, 7, 1.1);
+        prop(f, r.id, 'counter', x, z - 3, 7, 1.1);
         prop(f, r.id, 'fridge', x + 4.5, z - 3, 1.5, 1.5, { hide: true });
         device(f, r.id, 'alarm', x - 4, z + 2.8);
       } else if (r.name.includes('bains')) {
@@ -166,8 +259,9 @@ prop(1, 'outside', 'table', -24, -9, 2, 1.3);
 prop(1, 'outside', 'plant', -20, 5, 1, 1);
 prop(1, 'outside', 'plant', -20, -5, 1, 1);
 prop(1, 'outside', 'boxes', 23, 8, 2, 1.8, { hide: true });
+device(1, 'outside', 'breaker', -18.8, 4);
 export function roomAt(f, x, z) {
-  return rooms.find((r) => r.f === f && Math.abs(x - r.x) < 6 && Math.abs(z - r.z) < 5);
+  return rooms.find((r) => r.f === f && Math.abs(x - r.x) < r.w / 2 && Math.abs(z - r.z) < r.d / 2);
 }
 export function distance(a, b) {
   return Math.hypot(a.x - b.x, a.z - b.z);
@@ -188,17 +282,22 @@ export function blocked(f, x, z, doorStates = {}, radius = 0.32, ignoreDoors = f
   return (
     walls.some((w) => w.f === f && inside(x, z, w, radius)) ||
     props.some((p) => p.f === f && p.solid && inside(x, z, p, radius)) ||
-    (!ignoreDoors && doors.some((d) => d.f === f && !doorStates[d.id] && inside(x, z, d, radius)))
+    doors.some(
+      (d) =>
+        d.f === f && (d.window || (!ignoreDoors && !doorStates[d.id])) && inside(x, z, d, radius),
+    )
   );
 }
-export function lineClear(f, a, b, doorStates = {}, ignoreFurniture = false) {
+export function lineClear(f, a, b, doorStates = {}, ignoreFurniture = false, throughGlass = true) {
   const n = Math.ceil(distance(a, b) / 0.18);
   for (let i = 1; i < n; i++) {
     const x = a.x + ((b.x - a.x) * i) / n,
       z = a.z + ((b.z - a.z) * i) / n;
     if (
       walls.some((w) => w.f === f && inside(x, z, w)) ||
-      doors.some((d) => d.f === f && !doorStates[d.id] && inside(x, z, d)) ||
+      doors.some(
+        (d) => d.f === f && (d.window ? !throughGlass : !doorStates[d.id]) && inside(x, z, d),
+      ) ||
       (!ignoreFurniture &&
         props.some((p) => p.f === f && p.solid && p.type !== 'chair' && inside(x, z, p)))
     )
@@ -286,7 +385,19 @@ export function visibleRegions(viewer, states = {}) {
   const current = regionAt(viewer.f, viewer.x, viewer.z),
     visible = new Set([current]);
   for (const d of doors) {
-    if (d.f !== viewer.f || !states[d.id] || distance(viewer, d) > 6.5) continue;
+    if (d.f !== viewer.f) continue;
+    if (d.window) {
+      if (
+        nearWindow(viewer, d, 3) &&
+        lineClear(viewer.f, viewer, d, states) &&
+        (current === 'outside' || current === d.room)
+      ) {
+        visible.add('outside');
+        visible.add(d.room);
+      }
+      continue;
+    }
+    if (!states[d.id] || distance(viewer, d) > 6.5) continue;
     const normal = d.axis === 'z' ? { x: 1, z: 0 } : { x: 0, z: 1 };
     const a = regionAt(d.f, d.x + normal.x * 0.7, d.z + normal.z * 0.7),
       b = regionAt(d.f, d.x - normal.x * 0.7, d.z - normal.z * 0.7);
@@ -303,4 +414,31 @@ export function canObserve(viewer, point, states = {}, regions = visibleRegions(
     regions.has(regionAt(point.f, point.x, point.z)) &&
     lineClear(point.f, viewer, point, states)
   );
+}
+
+export function windowNormal(d) {
+  return d.axis === 'z' ? { x: Math.sign(d.x), z: 0 } : { x: 0, z: Math.sign(d.z) };
+}
+export function nearWindow(p, d, range = 1.85) {
+  if (!d.window || p.f !== d.f || distance(p, d) > range) return false;
+  const tangent = d.axis === 'z' ? Math.abs(p.z - d.z) : Math.abs(p.x - d.x);
+  return tangent < 0.85;
+}
+export function windowLanding(p, d, states = {}) {
+  const normal = windowNormal(d),
+    outside = regionAt(p.f, p.x, p.z) === 'outside',
+    sign = outside ? -1 : 1;
+  for (const depth of [1.05, 1.3, 1.55])
+    for (const offset of [0, -0.45, 0.45]) {
+      const dest = {
+        x: d.x + normal.x * depth * sign + normal.z * offset,
+        z: d.z + normal.z * depth * sign + normal.x * offset,
+      };
+      if (
+        !blocked(d.f, dest.x, dest.z, states) &&
+        regionAt(d.f, dest.x, dest.z) === (outside ? d.room : 'outside')
+      )
+        return dest;
+    }
+  return null;
 }

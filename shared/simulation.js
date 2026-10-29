@@ -11,6 +11,9 @@ import {
   pathfind,
   lineClear,
   roomAt,
+  regionAt,
+  nearWindow,
+  windowLanding,
 } from './map.js';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const names = ['Léa', 'Tony « la poêle »', 'Max', 'Sofia', 'Hugo', 'Camille', 'Sam', 'Nora'];
@@ -31,6 +34,7 @@ export class Simulation {
     this.blood = [];
     this.alarmAt = null;
     this.lastSpeech = -20;
+    this.power = true;
     this.duration = duration;
     this.seed = seed;
     this.phase = 'lobby';
@@ -91,6 +95,7 @@ export class Simulation {
     this.blood = [];
     this.alarmAt = null;
     this.lastSpeech = -20;
+    this.power = true;
     this.time = 0;
     this.remaining = this.duration;
     this.result = null;
@@ -106,6 +111,8 @@ export class Simulation {
         x: this.scenario === 'hunt' ? -12 + i * 2 : -22,
         z: this.scenario === 'hunt' ? -3.8 : i * 2,
         dragging: null,
+        climb: null,
+        climbHeight: 0,
         opening: null,
         openProgress: 0,
         attackCooldown: 0,
@@ -203,6 +210,7 @@ export class Simulation {
     const p = this.players.find((p) => p.id === id);
     if (!p || p.status !== 'free' || !['intro', 'playing', 'infiltration'].includes(this.phase))
       return;
+    if (p.climb) return;
     if (p.hidden) {
       p.hidden = null;
       p.invuln = Math.max(p.invuln, 0.4);
@@ -215,6 +223,7 @@ export class Simulation {
     p.interactUntil = this.time + 0.55;
     if (kind === 'rescue') return;
     if (kind === 'door') {
+      if (obj.window && this.players.some((other) => other.climb?.window === obj.id)) return;
       if (obj.window && !this.doorStates[obj.id]) {
         p.opening = obj.id;
         p.openStarted = this.time;
@@ -256,15 +265,31 @@ export class Simulation {
     if (kind === 'device') {
       if (obj.type === 'light') {
         this.lightStates[obj.room] = !this.lightStates[obj.room];
-        this.event('switch', this.lightStates[obj.room] ? 'Lumière allumée' : 'Lumière éteinte', {
-          f: p.f,
-          x: p.x,
-          z: p.z,
-        });
+        this.event(
+          'switch',
+          !this.power
+            ? 'Pas de courant : rétablissez le coffret électrique.'
+            : this.lightStates[obj.room]
+              ? 'Lumière allumée'
+              : 'Lumière éteinte',
+          {
+            f: p.f,
+            x: p.x,
+            z: p.z,
+          },
+        );
       } else if (obj.type === 'breaker') {
-        for (const r of rooms.filter((r) => r.f === p.f))
-          this.lightStates[r.id] = !this.lightStates[r.id];
-        this.noise(p.f, obj.x, obj.z, 15, 'Le disjoncteur vient de sauter.', p.id);
+        this.power = !this.power;
+        this.noise(
+          p.f,
+          obj.x,
+          obj.z,
+          12,
+          this.power
+            ? 'Le courant est rétabli.'
+            : 'Courant coupé : maison et allée plongées dans le noir.',
+          p.id,
+        );
       } else if (obj.type === 'bottles') {
         p.bottles = 3;
         this.event('pickup', 'Trois bouteilles. Trois mauvaises idées.', { player: p.id });
@@ -302,7 +327,14 @@ export class Simulation {
           obj.f === p.f &&
           distance(p, obj) < range &&
           (kind !== 'stairs' || obj.to !== null) &&
-          lineClear(p.f, p, obj, this.doorStates, true)
+          lineClear(
+            p.f,
+            p,
+            obj,
+            kind === 'door' ? { ...this.doorStates, [obj.id]: true } : this.doorStates,
+            true,
+            !!obj.window,
+          )
         )
           targets.push({
             kind,
@@ -330,6 +362,8 @@ export class Simulation {
     if (!['intro', 'playing', 'infiltration'].includes(this.phase)) return;
     const p = this.players.find((p) => p.id === id);
     if (!p) return;
+    if (type === 'climb') this.climbWindow(p);
+    if (p.climb && type !== 'torch') return;
     if (type === 'attack') this.stab(p);
     if (type === 'drag') this.toggleDrag(p);
     if (type === 'interact') this.interact(id);
@@ -373,7 +407,7 @@ export class Simulation {
     if (g.alive === false || g.f !== p.f || p.status !== 'free' || p.hidden) return false;
     const d = distance(g, p),
       r = roomAt(p.f, p.x, p.z),
-      lit = !r || this.lightStates[r.id];
+      lit = this.power && (!r || this.lightStates[r.id]);
     const range = (lit ? 8 : 4.6) * (p.input.crouch ? 0.65 : 1) + (p.torch ? 4 : 0);
     if (d > range) return false;
     const facing = Math.atan2(p.x - g.x, p.z - g.z),
@@ -387,6 +421,42 @@ export class Simulation {
     g.say = text;
     g.sayUntil = this.time + 3.2;
     this.event('voice', `${g.name} : « ${text} »`, { f: g.f, x: g.x, z: g.z });
+  }
+  climbWindow(p) {
+    if (p.status !== 'free' || p.hidden || p.climb) return;
+    const d = doors
+      .filter((d) => nearWindow(p, d))
+      .sort((a, b) => distance(p, a) - distance(p, b))[0];
+    if (!d || !['outside', d.room].includes(regionAt(p.f, p.x, p.z))) return;
+    if (p.dragging) {
+      this.event('warning', 'Déposez le corps avant d’escalader.', { player: p.id });
+      return;
+    }
+    if (!this.doorStates[d.id]) {
+      this.event('warning', 'Maintenez E pour déverrouiller la fenêtre, puis V pour l’escalader.', {
+        player: p.id,
+      });
+      return;
+    }
+    const dest = windowLanding(p, d, this.doorStates);
+    if (!dest) {
+      this.event('warning', 'Le passage est encombré.', { player: p.id });
+      return;
+    }
+    p.climb = {
+      window: d.id,
+      fromX: p.x,
+      fromZ: p.z,
+      x: dest.x,
+      z: dest.z,
+      elapsed: 0,
+      duration: 0.85,
+    };
+    p.opening = null;
+    p.openProgress = 0;
+    p.input = {};
+    p.running = false;
+    this.event('climb', 'Vous franchissez la fenêtre.', { player: p.id });
   }
   isolated(g) {
     return !this.guards.some(
@@ -406,7 +476,7 @@ export class Simulation {
           g.alive !== false &&
           g.f === p.f &&
           distance(g, p) < 1.6 &&
-          lineClear(p.f, p, g, this.doorStates),
+          lineClear(p.f, p, g, this.doorStates, false, false),
       )
       .sort((a, b) => distance(p, a) - distance(p, b))[0];
     if (!target) return;
@@ -456,7 +526,7 @@ export class Simulation {
           !b.draggedBy &&
           b.f === p.f &&
           distance(p, b) < 1.9 &&
-          lineClear(p.f, p, b, this.doorStates),
+          lineClear(p.f, p, b, this.doorStates, false, false),
       )
       .sort((a, b) => distance(a, p) - distance(b, p))[0];
     if (body) {
@@ -504,7 +574,9 @@ export class Simulation {
     }
   }
   seesEvidence(g, e) {
-    if (g.f !== e.f || distance(g, e) > 6) return false;
+    const room = roomAt(e.f, e.x, e.z),
+      lit = this.power && (!room || this.lightStates[room.id]);
+    if (g.f !== e.f || distance(g, e) > (lit ? 6 : 2.2)) return false;
     const a = Math.atan2(e.x - g.x, e.z - g.z),
       delta = Math.atan2(Math.sin(a - g.angle), Math.cos(a - g.angle));
     return (
@@ -565,6 +637,8 @@ export class Simulation {
     this.navigate(g, g.goal, dt, 1.25);
   }
   capture(g, p) {
+    p.climb = null;
+    p.climbHeight = 0;
     if (p.dragging) {
       const body = this.bodies.find((b) => b.id === p.dragging);
       if (body) body.draggedBy = null;
@@ -679,7 +753,7 @@ export class Simulation {
         g.f === p.f &&
         g.attack === 0 &&
         p.invuln <= 0 &&
-        lineClear(g.f, g, p, this.doorStates)
+        lineClear(g.f, g, p, this.doorStates, false, false)
       ) {
         g.attack = 1.5;
         p.hp--;
@@ -793,7 +867,8 @@ export class Simulation {
     }
     const next = g.path[0];
     if (!next) return;
-    for (const d of doors) if (d.f === g.f && distance(g, d) < 1.6) this.doorStates[d.id] = true;
+    for (const d of doors)
+      if (!d.window && d.f === g.f && distance(g, d) < 1.6) this.doorStates[d.id] = true;
     const dx = next.x - g.x,
       dz = next.z - g.z,
       d = Math.hypot(dx, dz);
@@ -829,6 +904,22 @@ export class Simulation {
         continue;
       }
       if (p.status !== 'free') continue;
+      if (p.climb) {
+        const c = p.climb;
+        c.elapsed += dt;
+        const t = Math.min(1, c.elapsed / c.duration);
+        p.x = c.fromX + (c.x - c.fromX) * t;
+        p.z = c.fromZ + (c.z - c.fromZ) * t;
+        p.climbHeight = Math.sin(t * Math.PI) * 0.8;
+        p.moving = false;
+        if (t >= 1) {
+          p.x = c.x;
+          p.z = c.z;
+          p.climb = null;
+          p.climbHeight = 0;
+        }
+        continue;
+      }
       p.angle = p.input.angle || 0;
       if (p.hidden) continue;
       const inp = p.input,
@@ -929,6 +1020,7 @@ export class Simulation {
     return {
       phase: this.phase,
       scenario: this.scenario,
+      power: this.power,
       bodies: this.bodies,
       blood: this.blood,
       alarmAt: this.alarmAt,

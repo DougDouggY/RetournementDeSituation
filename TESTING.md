@@ -56,3 +56,17 @@ La régression navigateur coopérative de la version 0.2 passe : deux clients in
 ## Déploiement simplifié pour les réglages Cloudflare existants
 
 La capture du tableau de bord indique `npm run build` puis `npx wrangler deploy`. Ces commandes sont désormais les valeurs par défaut du solo : compilation en mode solo et Worker statique nommé `retournement-de-situation-solo`. La configuration coopérative reste dans `wrangler.coop.jsonc`, avec les scripts explicites `build:coop` et `deploy:coop`. Vérifications : compilation par la commande exacte du tableau de bord, assemblage `wrangler deploy --dry-run` sans bindings, et test navigateur solo avec les API bloquées.
+
+## Version 0.3 : fenêtres, éclairage et nouveau plan
+
+Les tests de logique sont portés à 42. Les anciennes vérifications de portes/murs ont été repositionnées sur les nouvelles cloisons, sans désactiver leurs assertions. Les dimensions et limites de chaque meuble sont vérifiées sur les 18 pièces ; les deux nuits simulées complètes restent couvertes.
+
+Nouveaux contrôles : six fenêtres associées aux six pièces du rez-de-chaussée ; zones d’arrivée libres des deux côtés ; observation à travers une vitre fermée à proximité, et masquage en s’éloignant ; distinction entre visibilité et collision physique du verre ; refus des attaques et des prises de corps au travers de la vitre ; marche toujours bloquée, escalade réservée à V après déverrouillage ; progression/hauteur de l’animation et retour par la même fenêtre ; refus de l’escalade à distance ou les mains occupées ; coupure générale par le coffret extérieur et celui du sous-sol, réglages locaux préservés et impossibilité de contourner une panne par un interrupteur ; influence de la panne sur la vision des invités ; fenêtres laissées fermées par les IA qui passent à proximité.
+
+Le rendu comprend six bornes d’allée, des vitrages à cadres, des lueurs au sol, un éclairage intérieur renforcé et des façades qui s’effacent localement pour l’observation. Les classes de matériaux et les géométries sont réutilisées ; seules deux lumières de fenêtres proches sont actives à la fois.
+
+Le test navigateur de la version 0.3 passe sur le vrai build solo, sans appels d’API de jeu ni WebSocket et sans erreur JavaScript/WebGL : lumières de l’allée au départ, ouverture de l’entrée, déplacement au coffret au clavier, extinction/rétablissement effectif des intensités des lampes de pièces et d’allée et de l’émission des vitres, observation du bureau à travers sa vitre encore fermée, maintien E jusqu’au déverrouillage puis V pour entrer et V pour ressortir. Les captures `power-off.png`, `window-scouting.png` et `window-inside.png` ont été inspectées. Le test ne remplace pas un essai de performances sur le GPU du joueur.
+
+Un contrôle supplémentaire couvre l’approche d’une fenêtre en biais : son propre vitrage ne doit pas empêcher son déverrouillage, tout en conservant l’occlusion des murs et des autres obstacles. Les changements de touche envoient désormais immédiatement les commandes, sans attendre la prochaine image.
+
+La coupure de courant réduit aussi la portée de découverte du sang par les invités non armés, en plus de la détection des joueurs. La régression à deux navigateurs passe sur la version 0.3 : salon, rôles, entrée, mouvements, lampe et bruit synchronisés, reconnexion et victoire parfaite à l’issue de la manche de test raccourcie.

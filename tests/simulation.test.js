@@ -95,15 +95,15 @@ test('all room entries, stairs and hide approaches reachable on three floors', (
 test('collisions: exterior, internal walls, doors, furniture', () => {
   const s = game(),
     p = s.players[0];
-  Object.assign(p, { f: 1, x: -12, z: -1 });
+  Object.assign(p, { f: 1, x: -10, z: -1 });
   s.move(p, 0, -3);
   assert.ok(p.z > -1.6);
   s.doorStates['d1-0'] = true;
   s.move(p, 0, -3);
   assert.ok(p.z < -2);
-  Object.assign(p, { x: -6.6, z: -6 });
+  Object.assign(p, { x: -2.6, z: -6 });
   s.move(p, 2, 0);
-  assert.ok(p.x < -6.4);
+  assert.ok(p.x < -2.4);
   Object.assign(p, { x: -14, z: -5.5 });
   s.move(p, 0, -2);
   assert.ok(p.z > -6);
@@ -133,19 +133,19 @@ test('directional vision blocked by walls, closed doors and opaque furniture; cr
   const s = game(),
     g = s.guards[0],
     p = s.players[0];
-  Object.assign(g, { f: 1, x: -12, z: 0, angle: Math.PI });
-  Object.assign(p, { f: 1, x: -12, z: -3, input: {} });
+  Object.assign(g, { f: 1, x: -10, z: 0, angle: Math.PI });
+  Object.assign(p, { f: 1, x: -10, z: -3, input: {} });
   assert.equal(s.canSee(g, p), false);
   s.doorStates['d1-0'] = true;
   assert.equal(s.canSee(g, p), true);
   g.angle = 0;
   assert.equal(s.canSee(g, p), false);
-  Object.assign(g, { x: -7, z: -9, angle: Math.PI / 2 });
-  Object.assign(p, { x: -5, z: -9 });
+  Object.assign(g, { x: -3, z: -9, angle: Math.PI / 2 });
+  Object.assign(p, { x: -1, z: -9 });
   assert.equal(s.canSee(g, p), false);
   assert.equal(lineClear(1, { x: -16, z: -7 }, { x: -12, z: -7 }, s.doorStates), false);
-  Object.assign(g, { x: -12, z: 0, angle: Math.PI / 2 });
-  Object.assign(p, { x: -6, z: 0 });
+  Object.assign(g, { x: -10, z: 0, angle: Math.PI / 2 });
+  Object.assign(p, { x: -4, z: 0 });
   assert.equal(s.canSee(g, p), true);
   p.input.crouch = true;
   assert.equal(s.canSee(g, p), false);
@@ -160,8 +160,8 @@ test('hearing follows noise source, attenuates through walls, ignores other floo
   g.state = 'patrol';
   s.noise(2, 0, 0, 20, 'upstairs');
   assert.equal(g.state, 'patrol');
-  Object.assign(g, { x: -7, z: -10 });
-  s.noise(1, -3, -10, 5, 'wall');
+  Object.assign(g, { x: -3, z: -9 });
+  s.noise(1, 1, -9, 5, 'wall');
   assert.equal(g.state, 'patrol');
 });
 test('hiding extinguishes torch, blocks vision, physical inspection finds player', () => {

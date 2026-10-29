@@ -7,7 +7,7 @@ const server = spawn(process.execPath, ['server/local.js', '--production'], {
   env: { ...process.env, PORT: '5175' },
   stdio: 'ignore',
 });
-let browser;
+let browser, page;
 await fs.mkdir('test-results', { recursive: true });
 try {
   for (let i = 0; i < 100; i++) {
@@ -26,7 +26,7 @@ try {
       '--disable-dev-shm-usage',
     ],
   });
-  const page = await browser.newPage({ viewport: { width: 1100, height: 800 } });
+  page = await browser.newPage({ viewport: { width: 1100, height: 800 } });
   const errors = [],
     apiRequests = [],
     sockets = [];
@@ -79,6 +79,7 @@ try {
   await page.locator('#settings-close').click();
   await page.waitForFunction(() => window.__RDS.state.paused === false);
   console.log('PASS solo pause and resume');
+  await page.keyboard.down('KeyC');
   await page.keyboard.press('KeyF');
   await page.waitForFunction(() => window.__RDS.state.players[0].torch === true);
   await page.keyboard.down('KeyD');
@@ -93,6 +94,57 @@ try {
   await page.keyboard.press('KeyG');
   await page.waitForFunction(() => window.__RDS.state.players[0].bottles === 2);
   await page.screenshot({ path: 'test-results/infiltration-entry.png' });
+  // Step away from the doorway before approaching the meter along the outer wall.
+  await page.keyboard.down('KeyS');
+  await page.waitForFunction(() => window.__RDS.state.players[0].z > 2.5);
+  await page.keyboard.up('KeyS');
+  // Walk to the external meter; test real controls and actual rendered lights.
+  await page.keyboard.down('KeyD');
+  await page.waitForFunction(() => window.__RDS.state.players[0].x > -19);
+  await page.keyboard.up('KeyD');
+  await page.keyboard.down('KeyS');
+  await page.waitForFunction(() => window.__RDS.state.players[0].z > 3.35);
+  await page.keyboard.up('KeyS');
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(
+    () =>
+      window.__RDS.state.power === false &&
+      window.__RDS.gardenLights.every((v) => v === 0) &&
+      Object.values(window.__RDS.roomLights).every((v) => v === 0) &&
+      window.__RDS.windowLights.every((v) => v.emission === 0),
+  );
+  await page.screenshot({ path: 'test-results/power-off.png' });
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(
+    () =>
+      window.__RDS.state.power === true &&
+      window.__RDS.gardenLights.some((v) => v > 0) &&
+      Object.values(window.__RDS.roomLights).every((v) => v > 0),
+  );
+  console.log(
+    'PASS external breaker cuts and restores room lights, path lamps and glowing windows',
+  );
+  await page.keyboard.down('KeyS');
+  await page.waitForFunction(() => window.__RDS.state.players[0].z > 6.55);
+  await page.keyboard.up('KeyS');
+  await page.waitForFunction(() => window.__RDS.visibleRooms.includes('r1-3'));
+  assert.equal(await page.evaluate(() => window.__RDS.state.doors['window-office']), false);
+  await page.screenshot({ path: 'test-results/window-scouting.png' });
+  await page.keyboard.down('KeyE');
+  await page.waitForFunction(() => window.__RDS.state.doors['window-office'] === true);
+  await page.keyboard.up('KeyE');
+  await page.keyboard.press('KeyV');
+  await page.waitForFunction(
+    () => window.__RDS.state.players[0].x > -18 && window.__RDS.state.players[0].climb === null,
+  );
+  assert.ok(await page.evaluate(() => window.__RDS.visibleRooms.includes('r1-3')));
+  await page.screenshot({ path: 'test-results/window-inside.png' });
+  await page.keyboard.press('KeyV');
+  await page.waitForFunction(
+    () => window.__RDS.state.players[0].x < -18.02 && window.__RDS.state.players[0].climb === null,
+  );
+  console.log('PASS observing through closed glass, unlocking, climbing in and climbing back out');
+
   await page.locator('#hud-settings').click();
   await page.waitForFunction(() => window.__RDS.state.paused === true);
   assert.deepEqual(apiRequests, []);
@@ -108,6 +160,21 @@ try {
     ),
   );
   console.log('PASS solo interactions, lamp and bottles without any HTTP game API or WebSocket');
+} catch (error) {
+  if (page) {
+    console.error(
+      'SOLO_DIAGNOSTIC',
+      await page
+        .evaluate(() => ({
+          player: window.__RDS?.state?.players[0],
+          visible: window.__RDS?.visibleRooms,
+          power: window.__RDS?.state?.power,
+        }))
+        .catch(() => null),
+    );
+    await page.screenshot({ path: 'test-results/solo-failure.png' }).catch(() => {});
+  }
+  throw error;
 } finally {
   await browser?.close();
   server.kill('SIGTERM');
