@@ -14,6 +14,7 @@ import {
   regionAt,
   nearWindow,
   windowLanding,
+  bottleTrajectory,
 } from './map.js';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const names = ['Léa', 'Tony « la poêle »', 'Max', 'Sofia', 'Hugo', 'Camille', 'Sam', 'Nora'];
@@ -28,8 +29,9 @@ const personalities = [
   'prudent',
 ];
 export class Simulation {
-  constructor({ duration = NIGHT, seed = 2701, scenario = 'infiltration' } = {}) {
+  constructor({ duration = NIGHT, seed = 2701, scenario = 'infiltration', observer = false } = {}) {
     this.scenario = scenario;
+    this.observer = observer;
     this.bodies = [];
     this.blood = [];
     this.alarmAt = null;
@@ -39,6 +41,9 @@ export class Simulation {
     this.lastIncident = -20;
     this.nextRoutine = 24;
     this.routineIndex = 0;
+    this.socialMemory = [];
+    this.socialAt = 0;
+    this.repairDevice = null;
     this.duration = duration;
     this.seed = seed;
     this.phase = 'lobby';
@@ -104,6 +109,9 @@ export class Simulation {
     this.lastIncident = -20;
     this.nextRoutine = 24;
     this.routineIndex = 0;
+    this.socialMemory = [];
+    this.socialAt = 0;
+    this.repairDevice = null;
     this.time = 0;
     this.remaining = this.duration;
     this.result = null;
@@ -123,6 +131,10 @@ export class Simulation {
         climbHeight: 0,
         cleaning: null,
         cleanProgress: 0,
+        charging: false,
+        throwCharge: 0,
+        path: [],
+        botSabotaged: false,
         opening: null,
         openProgress: 0,
         attackCooldown: 0,
@@ -183,6 +195,13 @@ export class Simulation {
         inspection: 0,
       });
     }
+    this.socialMemory = this.guards.map((g) => ({
+      id: g.id,
+      name: g.name,
+      lastSeen: 0,
+      checkedAt: -100,
+      point: { f: g.f, x: g.x, z: g.z },
+    }));
     if (this.scenario === 'hunt')
       this.event(
         'intro',
@@ -326,6 +345,8 @@ export class Simulation {
         );
       } else if (obj.type === 'breaker') {
         this.power = !this.power;
+        this.repairDevice = this.power ? null : obj.id;
+        if (this.power) for (const g of this.guards) g.repair = null;
         this.noise(
           p.f,
           obj.x,
@@ -408,6 +429,24 @@ export class Simulation {
     if (!['intro', 'playing', 'infiltration'].includes(this.phase)) return;
     const p = this.players.find((p) => p.id === id);
     if (!p) return;
+    if (type === 'cancelThrow') {
+      p.charging = false;
+      p.throwCharge = 0;
+      return;
+    }
+    if (
+      type === 'charge' &&
+      p.status === 'free' &&
+      !p.hidden &&
+      !p.climb &&
+      !p.dragging &&
+      p.bottles > 0
+    ) {
+      p.charging = true;
+      p.chargeStarted = this.time;
+      p.throwCharge = 0;
+      return;
+    }
     if (type === 'climb') this.climbWindow(p);
     if (p.climb && type !== 'torch') return;
     if (type === 'attack') this.stab(p);
@@ -417,21 +456,34 @@ export class Simulation {
       p.torch = !p.torch;
       this.event('switch', 'Clic.', { player: p.id });
     }
-    if (type === 'throw' && p.status === 'free' && !p.hidden && p.bottles > 0) {
-      p.bottles--;
-      let x = p.x,
-        z = p.z;
-      const dir = { x: Math.sin(p.angle), z: Math.cos(p.angle) };
-      for (let i = 0; i < 25; i++) {
-        const nx = x + dir.x * 0.24,
-          nz = z + dir.z * 0.24;
-        if (blocked(p.f, nx, nz, this.doorStates, 0.05)) break;
-        x = nx;
-        z = nz;
-      }
-      this.thrown.push({ id: ++this.eventId, f: p.f, x, z, fromX: p.x, fromZ: p.z, at: this.time });
-      this.noise(p.f, x, z, 16, 'CRAC ! C’était un vase de famille ?', p.id);
+    if (type === 'throw') this.throwBottle(p);
+  }
+  throwBottle(p) {
+    if (p.status !== 'free' || p.hidden || p.climb || p.dragging || p.bottles <= 0) {
+      p.charging = false;
+      p.throwCharge = 0;
+      return;
     }
+    const charge = p.charging ? Math.min(1, (this.time - p.chargeStarted) / 2) : 0.37;
+    const path = bottleTrajectory(p, this.doorStates, charge);
+    p.bottles--;
+    p.charging = false;
+    p.throwCharge = 0;
+    this.thrown.push({
+      id: ++this.eventId,
+      f: p.f,
+      ...path,
+      fromX: p.x,
+      fromZ: p.z,
+      at: this.time,
+      source: p.id,
+      impacted: false,
+    });
+  }
+  turnToward(g, angle, dt) {
+    const delta = Math.atan2(Math.sin(angle - g.angle), Math.cos(angle - g.angle));
+    g.angle += clamp(delta, -dt * 2.2, dt * 2.2);
+    return Math.abs(delta);
   }
   move(entity, dx, dz, radius = 0.32) {
     let moved = false;
@@ -531,6 +583,7 @@ export class Simulation {
       return;
     }
     target.alive = false;
+    target.repair = null;
     target.state = 'dead';
     target.armed = false;
     target.target = null;
@@ -632,9 +685,7 @@ export class Simulation {
     if (g.f !== e.f || distance(g, e) > (lit ? 6 : 2.2)) return false;
     const a = Math.atan2(e.x - g.x, e.z - g.z),
       delta = Math.atan2(Math.sin(a - g.angle), Math.cos(a - g.angle));
-    return (
-      (distance(g, e) < 1.3 || Math.abs(delta) < 0.85) && lineClear(g.f, g, e, this.doorStates)
-    );
+    return Math.abs(delta) < 0.85 && lineClear(g.f, g, e, this.doorStates);
   }
   raiseAlarm(g, e, masked = false) {
     if (this.phase !== 'infiltration') return;
@@ -680,7 +731,7 @@ export class Simulation {
       }
       g.state = 'confrontation';
       g.last = { f: intruder.f, x: intruder.x, z: intruder.z };
-      g.angle = Math.atan2(intruder.x - g.x, intruder.z - g.z);
+      this.turnToward(g, Math.atan2(intruder.x - g.x, intruder.z - g.z), dt);
       if (
         intruder.running ||
         distance(intruder, g.challenge) > 1.4 ||
@@ -697,13 +748,13 @@ export class Simulation {
       }
       g.challenge = null;
     }
+    if (!g.challenge && this.updateRepair(g, dt)) return;
     if (g.last) {
       g.search -= dt;
-      this.navigate(g, g.last, dt, g.challenge ? 1.9 : 1.5);
-      if (g.f === g.last.f && distance(g, g.last) < 1.1) {
+      if (g.f === g.last.f && distance(g, g.last) < 0.8) {
         g.inspection += dt;
         g.angle += dt * 1.1;
-      }
+      } else this.navigate(g, g.last, dt, g.challenge ? 1.9 : 1.5);
       if (!g.challenge && (g.inspection > 2.5 || g.search <= 0)) {
         g.last = null;
         g.goal = null;
@@ -742,9 +793,23 @@ export class Simulation {
       g.state = 'party';
       if (g.f !== g.home.f || distance(g, g.home) > 0.5) this.navigate(g, g.home, dt, 1.2);
       else {
-        g.angle =
-          Math.atan2(-10 - g.x, -7 - g.z) +
-          Math.sin(this.time * 0.35 + Number(g.id.slice(1))) * 0.4;
+        const companions = this.guards.filter(
+          (other) =>
+            other !== g &&
+            other.alive !== false &&
+            other.f === g.f &&
+            other.state === 'party' &&
+            distance(other, g) < 7.5 &&
+            lineClear(g.f, g, other, this.doorStates),
+        );
+        const partner = companions[
+          (Math.floor(this.time / 12) + Number(g.id.slice(1))) % companions.length
+        ] || { x: -10, z: -7 };
+        this.turnToward(
+          g,
+          Math.atan2(partner.x - g.x, partner.z - g.z) + Math.sin(this.time * 0.35) * 0.12,
+          dt,
+        );
         if (g.think <= 0) {
           this.speak(
             g,
@@ -759,11 +824,66 @@ export class Simulation {
       }
     }
   }
-  updateParty() {
+  assignRepair() {
+    if (
+      !this.power &&
+      this.repairDevice &&
+      !this.guards.some((g) => g.alive !== false && g.repair)
+    ) {
+      const d = devices.find((d) => d.id === this.repairDevice);
+      const g = this.guards
+        .filter((g) => g.alive !== false && !g.challenge && !['chase', 'escort'].includes(g.state))
+        .sort(
+          (a, b) =>
+            Math.abs(a.f - d.f) * 30 + distance(a, d) - Math.abs(b.f - d.f) * 30 - distance(b, d),
+        )[0];
+      if (g) {
+        g.repair = { device: d.id, progress: 0 };
+        g.last = null;
+        g.errand = null;
+        g.path = [];
+      }
+    }
+  }
+  updateRepair(g, dt) {
+    if (g.repair) {
+      const d = devices.find((d) => d.id === g.repair.device);
+      if (!d || this.power) {
+        g.repair = null;
+        g.path = [];
+        return true;
+      }
+      g.state = 'repair';
+      const target = d.room === 'outside' ? { f: d.f, x: d.x - 0.6, z: d.z } : d;
+      this.navigate(g, target, dt, 1.4);
+      if (g.f === d.f && distance(g, target) < 1.1) {
+        g.repair.progress += dt;
+        if (g.repair.progress >= 3) {
+          this.power = true;
+          this.repairDevice = null;
+          g.repair = null;
+          g.last = null;
+          g.goal = null;
+          g.path = [];
+          this.event(
+            'switch',
+            'Le courant est rétabli par un invité. Rien d’autre ? On retourne à la soirée.',
+            { f: d.f, x: d.x, z: d.z },
+          );
+          this.speak(g, 'C’était le disjoncteur. C’est réparé.');
+        }
+      }
+      return true;
+    }
+    return false;
+  }
+  updateParty(dt = 0.05) {
+    if (this.time - this.lastIncident > 35) this.tension = Math.max(0, this.tension - dt * 0.12);
+    this.updateSocialMemory();
     if (this.time < this.nextRoutine) return;
     this.nextRoutine = this.time + 30 + this.random() * 20;
     if (this.guards.some((g) => g.alive !== false && g.errand)) return;
-    const guests = this.guards.filter((g) => g.alive !== false && g.state === 'party');
+    const guests = this.guards.filter((g) => g.alive !== false && g.state === 'party' && !g.repair);
     if (!guests.length) return;
     const g = guests[this.routineIndex % guests.length];
     const destinations = ['r1-4', 'r1-2', 'r2-4', 'r0-0'];
@@ -772,6 +892,101 @@ export class Simulation {
     g.errand = { f: r.f, x: r.x, z: r.z + (r.z < 0 ? 2.5 : -2.5), wait: 14 };
     g.path = [];
     g.goal = null;
+  }
+  updateSocialMemory() {
+    if (this.time < this.socialAt) return;
+    this.socialAt = this.time + 1;
+    for (const m of this.socialMemory) {
+      const friend = this.guards.find((g) => g.id === m.id);
+      if (
+        friend &&
+        friend.alive !== false &&
+        this.guards.some(
+          (g) =>
+            g !== friend &&
+            g.alive !== false &&
+            this.canSee(g, { ...friend, status: 'free', input: {} }),
+        )
+      ) {
+        m.lastSeen = this.time;
+        m.point = { f: friend.f, x: friend.x, z: friend.z };
+      }
+      if (this.time - m.lastSeen < 70 || this.time - m.checkedAt < 70) continue;
+      const searcher = this.guards.find(
+        (g) => g.id !== m.id && g.alive !== false && g.state === 'party' && !g.errand && !g.repair,
+      );
+      if (!searcher) continue;
+      m.checkedAt = this.time;
+      searcher.last = { ...m.point };
+      searcher.search = 12;
+      searcher.inspection = 0;
+      searcher.path = [];
+      searcher.state = 'suspicion';
+      this.tension = Math.max(1, this.tension);
+      this.lastIncident = this.time;
+      this.event('suspicion', `${searcher.name} va voir où est passé ${m.name}.`, {
+        f: searcher.f,
+        x: searcher.x,
+        z: searcher.z,
+      });
+      break;
+    }
+  }
+  updateKillerAI(dt) {
+    const p = this.players[0];
+    if (!p || p.status !== 'free' || p.climb || p.hidden) return;
+    p.path ||= [];
+    p.input = { angle: p.angle, crouch: true };
+    if (this.phase === 'infiltration' && !p.botSabotaged) {
+      const d = devices.find((d) => d.type === 'breaker' && d.room === 'outside');
+      const target = { f: d.f, x: d.x - 0.65, z: d.z };
+      this.navigate(p, target, dt, 1.8);
+      if (distance(p, target) < 0.7) {
+        this.interact(p.id);
+        p.botSabotaged = true;
+        p.path = [];
+      }
+    } else if (this.phase === 'infiltration') {
+      const isolated = this.guards
+        .filter((g) => g.alive !== false && this.isolated(g))
+        .sort(
+          (a, b) =>
+            Math.abs(a.f - p.f) * 30 + distance(a, p) - Math.abs(b.f - p.f) * 30 - distance(b, p),
+        )[0];
+      const target = isolated || { f: 1, x: -14, z: 0 };
+      this.navigate(p, target, dt, 1.8);
+      if (isolated && isolated.f === p.f && distance(p, isolated) < 1.5) {
+        this.stab(p);
+        p.path = [];
+      }
+    } else {
+      const threat = this.guards
+        .filter((g) => g.alive !== false && g.f === p.f)
+        .sort((a, b) => distance(a, p) - distance(b, p))[0];
+      if (!p.botEscape || this.time > p.botEscape.until || distance(p, p.botEscape) < 1) {
+        const candidates = [
+          { f: 1, x: -24, z: -12 },
+          { f: 1, x: 24, z: 12 },
+          { f: 1, x: -24, z: 12 },
+          { f: 1, x: 24, z: -12 },
+          { f: 2, x: -14, z: 0 },
+          { f: 0, x: 14, z: 0 },
+        ];
+        p.botEscape = {
+          ...candidates.sort((a, b) =>
+            threat ? distance(b, threat) - distance(a, threat) : this.random() - 0.5,
+          )[0],
+          until: this.time + 12,
+        };
+        p.path = [];
+      }
+      this.navigate(p, p.botEscape, dt, 3.4);
+      const victim = this.guards.find(
+        (g) => g.alive !== false && g.f === p.f && distance(p, g) < 1.5 && this.isolated(g),
+      );
+      if (victim) this.stab(p);
+    }
+    p.input.angle = p.angle;
   }
   nearestBlood(p) {
     return this.blood
@@ -863,6 +1078,12 @@ export class Simulation {
       this.updateGuest(g, dt);
       return;
     }
+    if (
+      g.state !== 'escort' &&
+      !this.players.some((p) => this.canSee(g, p)) &&
+      this.updateRepair(g, dt)
+    )
+      return;
     g.attack = Math.max(0, g.attack - dt);
     g.think -= dt;
     if (g.state === 'escort') {
@@ -1071,7 +1292,7 @@ export class Simulation {
       g.path.shift();
       return;
     }
-    g.angle = Math.atan2(dx, dz);
+    if (this.turnToward(g, Math.atan2(dx, dz), dt) > 0.7) return;
     this.move(g, (dx / d) * Math.min(speed * dt, d), (dz / d) * Math.min(speed * dt, d));
   }
   tick(dt) {
@@ -1084,12 +1305,23 @@ export class Simulation {
     }
     if (this.phase === 'playing' || this.phase === 'infiltration')
       this.remaining = Math.max(0, this.remaining - dt);
+    if (this.observer) this.updateKillerAI(dt);
+    for (const b of this.thrown)
+      if (!b.impacted && this.time >= b.at + b.duration) {
+        b.impacted = true;
+        this.noise(b.f, b.x, b.z, 16, 'CRAC ! La bouteille attire les invités ici.', b.source);
+      }
     this.noises = this.noises.filter((n) => this.time - n.at < 2.5);
     this.thrown = this.thrown.filter((n) => this.time - n.at < 3);
     for (const p of this.players) {
       p.invuln = Math.max(0, p.invuln - dt);
       p.attackCooldown = Math.max(0, (p.attackCooldown || 0) - dt);
       p.noise = Math.max(0, p.noise - dt * 2);
+      if (p.hidden || p.climb || p.status !== 'free') {
+        p.charging = false;
+        p.throwCharge = 0;
+      }
+      if (p.charging) p.throwCharge = Math.min(1, (this.time - p.chargeStarted) / 2);
       if (p.status === 'captured') {
         p.bleed -= dt;
         if (p.bleed <= 0) {
@@ -1183,7 +1415,8 @@ export class Simulation {
         }
       } else p.rescue = 0;
     }
-    if (this.phase === 'infiltration') this.updateParty();
+    this.assignRepair();
+    if (this.phase === 'infiltration') this.updateParty(dt);
     if (this.phase === 'playing' || this.phase === 'infiltration')
       for (const g of this.guards) this.updateGuard(g, dt);
     if (this.guards.length && this.guards.every((g) => g.alive === false)) {
@@ -1217,6 +1450,7 @@ export class Simulation {
     return {
       phase: this.phase,
       scenario: this.scenario,
+      observer: this.observer,
       power: this.power,
       bodies: this.bodies,
       blood: this.blood,

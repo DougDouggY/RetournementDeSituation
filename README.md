@@ -68,7 +68,7 @@ L’archive `retournement-de-situation-solo.zip` contient le site statique : ell
 | Maintenir X 3 secondes, immobile | Nettoyer une petite zone de sang ; relâcher ou bouger annule la progression |
 | Maintenir E 2,5 secondes | Détacher un partenaire capturé à proximité |
 | F | Lampe torche |
-| G | Lancer une bouteille vers la souris (trois, rechargeables dans les pièces) |
+| Maintenir G, puis relâcher | Afficher la trajectoire et charger la portée (maximum après 2 s, jusqu’à 12 m), puis lancer |
 | Tab | État de l’équipe et rappel des règles |
 | Échap | Paramètres (la nuit continue en ligne) |
 
@@ -113,7 +113,7 @@ npx wrangler deploy --dry-run
 
 Le test navigateur utilise `/usr/bin/chromium` par défaut. Définir `CHROMIUM_PATH` si nécessaire, ou installer Chromium et adapter cette variable. Le runner crée son propre serveur de test sur **5174**, exécute une manche complète **raccourcie à 25 secondes**, vérifie les deux clients et ferme ses processus. Le jeu normal conserve neuf minutes. `RDS_NIGHT_SECONDS` est uniquement une surcharge de durée du serveur Node ; elle n’expose aucune commande de triche côté client et ne concerne pas le Worker de production.
 
-Les 52 tests de logique vérifient notamment deux nuits simulées entières de neuf minutes (infiltration et chasse), les corps, leur déplacement, les traces, leur nettoyage, la dissimulation des corps, la soirée, les réactions graduées au bruit, le masque, les pièces en L et les témoins, le déclenchement physique de l’alarme, les entrées extérieures et le masquage des pièces, les huit agents sur les trois niveaux, chaque porte/escalier, l’accès aux cachettes, l’occlusion de la vision, l’audition, la poursuite, la capture, le sauvetage et les trois issues. Les tests navigateur vérifient les salons, les rôles, le clavier réel, la synchronisation, la lampe, les bruits, l’interface d’équipe et la reconnexion. Les artefacts des essais sont écrits dans `test-results/`, ignoré par Git. `npm run test:party` vérifie au clavier réel X (progression, annulation et nettoyage), R (transport), E (dissimulation) et R (reprise), dans une scène déterministe injectée uniquement par le test dans la réponse du Worker de développement. Pour vérifier le Durable Object local, lancer `npm run cf:dev`, puis dans un autre terminal `npm run test:cloudflare`.
+Les 62 tests de logique vérifient notamment deux nuits simulées entières de neuf minutes (infiltration et chasse), les corps, leur déplacement, les traces, leur nettoyage, la dissimulation des corps, la soirée, les réactions graduées au bruit, le masque, les pièces en L et les témoins, le déclenchement physique de l’alarme, les entrées extérieures et le masquage des pièces, les huit agents sur les trois niveaux, chaque porte/escalier, l’accès aux cachettes, l’occlusion de la vision, l’audition, la poursuite, la capture, le sauvetage et les trois issues. Les tests navigateur vérifient les salons, les rôles, le clavier réel, la synchronisation, la lampe, les bruits, l’interface d’équipe et la reconnexion. Les artefacts des essais sont écrits dans `test-results/`, ignoré par Git. `npm run test:party` vérifie au clavier réel X (progression, annulation et nettoyage), R (transport), E (dissimulation) et R (reprise), dans une scène déterministe injectée uniquement par le test dans la réponse du Worker de développement. Pour vérifier le Durable Object local, lancer `npm run cf:dev`, puis dans un autre terminal `npm run test:cloudflare`.
 
 ## Architecture
 
@@ -141,3 +141,18 @@ La simulation tourne à 20 Hz et diffuse à 10 Hz. Les trajectoires sont interpo
 - Cible clavier/souris sur ordinateur. L’interface s’adapte aux petites fenêtres ; aucune commande tactile de jeu n’est implémentée.
 
 Les ressources graphiques et les sons sont créés dans le code. Three.js, ws, Vite, Playwright et Wrangler conservent leurs licences respectives dans leurs paquets ; les polices Barlow Condensed et DM Sans sont distribuées localement sous SIL Open Font License.
+
+
+## Version 0.5 : observer et discuter du plan
+
+Le menu propose **Observer une partie · tueur IA**. Un tueur autonome utilise la même simulation et les mêmes collisions, coupe le courant, approche des invités isolés et tente de fuir pendant la chasse. Le spectateur voit toutes les pièces du niveau sélectionné, peut choisir le sous-sol, le RDC ou l’étage, accélérer la simulation ×1/×2/×4 et mettre en pause avec les paramètres. Une lumière de lecture permet de suivre la scène même pendant une panne ; elle ne change pas la visibilité des IA. Le mode reste une première IA de démonstration, pas une stratégie optimale garantie.
+
+En solo manuel, maintenir G affiche une trajectoire calculée avec les mêmes collisions que le lancer réel. La portée augmente de 2,5 à 12 mètres en deux secondes ; un mur ou un obstacle la raccourcit. La bouteille est consommée au relâchement et le bruit apparaît à l’impact, après le vol. La pause ou la perte de focus annule la préparation sans consommer de bouteille.
+
+Les invités se tournent progressivement, au lieu de faire volte-face instantanément vers un bruit. Leur orientation à l’écran est celle utilisée pour leur champ de vision (environ 97° au total) ; le sang n’est plus automatiquement visible derrière eux à courte portée. Entendre derrière soi reste possible, voir derrière soi ne l’est pas. Les pièces éclairées sont plus lumineuses.
+
+Un seul invité disponible est chargé de rejoindre le coffret réellement actionné et de le réparer pendant trois secondes, pendant l’infiltration ou la chasse. Sans preuve, l’inquiétude commence à décroître après 35 secondes sans nouvel incident et les patrouilles retournent à la soirée. L’absence prolongée d’un ami peut provoquer une recherche locale depuis son dernier emplacement vu, sans révéler un corps caché ni déclencher automatiquement une chasse. Une fenêtre ouverte, seule, n’est pas une preuve.
+
+La page **/plans.html** compare le plan exact actuel (sous-sol + RDC + étage) à une proposition de grande maison **RDC + un étage, sans sous-sol**, avec terrasse, piscine, salon et salle à manger de soirée, cuisine, WC, deux escaliers et circulation en boucle. La proposition est une esquisse à discuter, **pas encore la carte jouable** : les invités du jeu actuel restent réunis au salon au départ. `npm run plans` régénère les SVG et la page à partir du plan courant ; les PNG dans `public/plans/` sont les images de revue correspondantes.
+
+`npm run test:observer` teste le mode autonome, la vue globale, les trois sélecteurs de niveau, la vitesse et la pause, puis la préparation de G, sa trajectoire visible, le relâchement et le bruit d’impact. Le test vérifie aussi les deux onglets des plans, sans erreurs JavaScript/WebGL. Les données du mode observateur ne passent par aucun service de jeu externe.

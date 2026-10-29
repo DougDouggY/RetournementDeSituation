@@ -520,3 +520,22 @@ for (const h of hides) {
   );
   if (access) Object.assign(h, access);
 }
+
+// Both prediction and authority use this conservative collision-aware throw path.
+export function bottleTrajectory(p, states = {}, charge = 0) {
+  const strength = Math.max(0, Math.min(1, charge)),
+    reach = 2.5 + strength * 9.5;
+  const dir = { x: Math.sin(p.angle), z: Math.cos(p.angle) };
+  let x = p.x,
+    z = p.z;
+  for (let d = 0; d < reach; d += 0.15) {
+    const step = Math.min(0.15, reach - d),
+      nx = x + dir.x * step,
+      nz = z + dir.z * step;
+    if (blocked(p.f, nx, nz, states, 0.05)) break;
+    x = nx;
+    z = nz;
+  }
+  const range = Math.hypot(x - p.x, z - p.z);
+  return { x, z, range, height: 1 + range * 0.12, duration: 0.35 + range * 0.045 };
+}

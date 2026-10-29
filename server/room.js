@@ -58,6 +58,8 @@ export class Room {
     if (p) {
       p.connected = false;
       p.input = {};
+      p.charging = false;
+      p.throwCharge = 0;
     }
     if (this.sim.phase === 'lobby') {
       this.members.delete(member.token);
@@ -78,7 +80,9 @@ export class Room {
     if (m.type === 'input') this.sim.setInput(member.id, m);
     if (
       m.type === 'action' &&
-      ['interact', 'torch', 'throw', 'attack', 'drag', 'climb'].includes(m.action)
+      ['interact', 'torch', 'throw', 'attack', 'drag', 'climb', 'charge', 'cancelThrow'].includes(
+        m.action,
+      )
     )
       this.sim.action(member.id, m.action);
     if (m.type === 'character' && this.sim.phase === 'lobby' && [0, 1].includes(m.character)) {

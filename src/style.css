@@ -1018,3 +1018,42 @@ dialog p {
   max-width: 430px;
   line-height: 2;
 }
+
+#observe {
+  margin-top: 10px;
+  width: 100%;
+}
+#menu > a[href='/plans.html'] {
+  display: inline-block;
+  margin: 10px 0;
+  text-decoration: none;
+}
+#observer-controls {
+  pointer-events: auto;
+  position: absolute;
+  z-index: 30;
+  top: 145px;
+  right: 28px;
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  flex-wrap: wrap;
+  max-width: 480px;
+  padding: 12px;
+  background: #102b2de8;
+  border: 1px solid #a7c1aa;
+  color: #f0e6ce;
+  font-size: 12px;
+}
+#observer-controls button,
+#observer-controls select {
+  background: #173638;
+  color: #f0e6ce;
+  border: 1px solid #537875;
+  padding: 8px;
+  cursor: pointer;
+}
+#observer-controls button[aria-pressed='true'] {
+  background: #d5b77e;
+  color: #14292b;
+}

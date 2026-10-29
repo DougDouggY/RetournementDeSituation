@@ -15,6 +15,7 @@ import {
   gardenLamps,
   windowNormal,
   roomFloorParts,
+  bottleTrajectory,
 } from '../shared/map.js';
 const palettes = [
   { floor: 0x4c5550, wall: 0x61736b },
@@ -459,11 +460,34 @@ export class GameScene {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 1.25;
     container.appendChild(this.renderer.domElement);
     this.camera = new THREE.OrthographicCamera(-14, 14, 10, -10, 0.1, 100);
     this.camera.position.set(0, 27, 17);
     this.camera.lookAt(0, 0, 0);
+    this.observerFloor = 1;
+    this.observerLight = new THREE.HemisphereLight(0xe1eeed, 0x899d9b, 0);
+    this.scene.add(this.observerLight);
+    this.throwAim = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({
+        color: 0xffdf84,
+        depthTest: false,
+        transparent: true,
+        opacity: 0.95,
+      }),
+    );
+    this.throwAim.renderOrder = 20;
+    this.throwAim.visible = false;
+    this.scene.add(this.throwAim);
+    this.throwLanding = new THREE.Mesh(
+      new THREE.RingGeometry(0.22, 0.32, 24),
+      new THREE.MeshBasicMaterial({ color: 0xffdf84, depthTest: false, side: THREE.DoubleSide }),
+    );
+    this.throwLanding.rotation.x = -Math.PI / 2;
+    this.throwLanding.visible = false;
+    this.throwLanding.renderOrder = 20;
+    this.scene.add(this.throwLanding);
     this.target = new THREE.Vector3(-12, 0, -5);
     this.scene.add(new THREE.HemisphereLight(0x748fa1, 0x080b10, 0.16));
     const moon = new THREE.DirectionalLight(0x7596ac, 0.2);
@@ -655,7 +679,7 @@ export class GameScene {
       // Framed prints hung on the far walls.
       box(roomGroup, r.x + 2, 1.5, r.z < 0 ? -11.82 : 11.82, 1.2, 0.85, 0.06, 0x413b30);
       box(roomGroup, r.x + 2, 1.5, r.z < 0 ? -11.77 : 11.77, 1.02, 0.65, 0.04, 0x9a8f70);
-      const glow = new THREE.PointLight(0xffdab2, 22, Math.max(r.w, r.d) + 3, 2);
+      const glow = new THREE.PointLight(0xffdab2, 38, Math.max(r.w, r.d) + 6, 2);
       glow.position.set(r.x, 3, r.z);
       cylinder(roomGroup, r.x, 2.8, r.z, 0.32, 0.4, 0.12, 0xeadab7);
       roomGroup.add(glow);
@@ -823,7 +847,8 @@ export class GameScene {
       Math.sin(p.angle - a.root.rotation.y),
       Math.cos(p.angle - a.root.rotation.y),
     );
-    a.root.rotation.y += delta * Math.min(1, dt * 15);
+    if (guard) a.root.rotation.y = p.angle;
+    else a.root.rotation.y += delta * Math.min(1, dt * 15);
     a.phase += dt * (speed > 3 ? 13 : 8);
     const captured = p.status === 'captured',
       eliminated = p.status === 'eliminated',
@@ -894,9 +919,20 @@ export class GameScene {
     for (let i = 0; i < this.previewActors.length; i++)
       this.previewActors[i].root.visible = !state && i !== 1;
     const me = state?.players.find((p) => p.id === myId);
-    this.viewer = me;
-    this.visibleRooms = me ? visibleRegions(me, state.doors) : null;
-    const f = me?.f ?? 1;
+    const observer = !!state?.observer;
+    this.observerLight.intensity = observer ? 1.8 : 0;
+    this.scene.fog.density = observer ? 0 : 0.012;
+    this.viewer = observer ? null : me;
+    const f = observer ? this.observerFloor : (me?.f ?? 1);
+    this.visibleRooms = observer
+      ? new Set([
+          ...rooms.filter((r) => r.f === f).map((r) => r.id),
+          `hall${f}`,
+          ...(f === 1 ? ['outside'] : []),
+        ])
+      : me
+        ? visibleRegions(me, state.doors)
+        : null;
     if (f !== this.floor) {
       this.floor = f;
       this.container.classList.add('floor-change');
@@ -905,6 +941,7 @@ export class GameScene {
     this.floors.forEach((g, i) => (g.visible = i === this.floor));
     for (const [id, group] of this.roomMeshes) group.visible = !me || this.visibleRooms.has(id);
     this.ground.visible = !me || this.visibleRooms.has('outside');
+    if (observer) this.exterior.visible = f === 1;
     for (const w of this.wallGroups) {
       const side = w.w > w.d ? { x: 0, z: 0.4 } : { x: 0.4, z: 0 };
       const regions = [
@@ -930,9 +967,17 @@ export class GameScene {
         ].some((r) => this.visibleRooms.has(r));
         this.doorGroups.get(d.id).visible = d.f === this.floor && visible;
       }
-    if (me) this.target.lerp(new THREE.Vector3(me.x, 0, me.z), 1 - Math.exp(-dt * 5));
+    if (observer) this.target.set(0, 0, 0);
+    else if (me) this.target.lerp(new THREE.Vector3(me.x, 0, me.z), 1 - Math.exp(-dt * 5));
     else this.target.set(-9, 0, -5);
-    this.camera.position.copy(this.target).add(new THREE.Vector3(0, 27, 17));
+    this.camera.position
+      .copy(this.target)
+      .add(observer ? new THREE.Vector3(0, 45, 0.01) : new THREE.Vector3(0, 27, 17));
+    const zoom = observer ? 0.48 : 1;
+    if (this.camera.zoom !== zoom) {
+      this.camera.zoom = zoom;
+      this.camera.updateProjectionMatrix();
+    }
     this.camera.lookAt(this.target);
     if (state) {
       this.nearLightIds = new Set(
@@ -978,7 +1023,7 @@ export class GameScene {
         }
       }
       for (const [id, light] of this.lightMeshes)
-        light.intensity = state.power !== false && state.lights[id] ? 22 : 0;
+        light.intensity = state.power !== false && state.lights[id] ? 38 : 0;
       for (const noise of state.noises.filter(
         (n) => n.f === this.floor && (!me || canObserve(me, n, state.doors, this.visibleRooms)),
       )) {
@@ -1014,14 +1059,21 @@ export class GameScene {
       const actor = this.bodyMeshes.get(b.id);
       actor.root.position.set(b.x, 0.28, b.z);
       actor.root.rotation.y = b.angle;
-      actor.root.visible = !b.hidden && !!me && canObserve(me, b, state.doors, this.visibleRooms);
+      actor.root.visible =
+        (!b.hidden || observer) &&
+        !!me &&
+        (observer ? b.f === f : canObserve(me, b, state.doors, this.visibleRooms));
     }
     for (const [id, actor] of this.bodyMeshes)
       if (!state?.bodies?.some((b) => b.id === id)) actor.root.visible = false;
     let bloodCount = 0;
     const stamp = new THREE.Object3D();
     for (const mark of state?.blood || []) {
-      if (bloodCount >= 5000 || !me || !canObserve(me, mark, state.doors, this.visibleRooms))
+      if (
+        bloodCount >= 5000 ||
+        !me ||
+        (observer ? mark.f !== f : !canObserve(me, mark, state.doors, this.visibleRooms))
+      )
         continue;
       stamp.position.set(mark.x, 0.085, mark.z);
       stamp.rotation.set(-Math.PI / 2, 0, 0);
@@ -1043,15 +1095,17 @@ export class GameScene {
         this.projectiles.set(b.id, mesh);
       }
       const mesh = this.projectiles.get(b.id),
-        t = Math.min(1, (state.time - b.at) / 0.65);
+        t = Math.min(1, (state.time - b.at) / (b.duration || 0.65));
       mesh.position.set(
         THREE.MathUtils.lerp(b.fromX, b.x, t),
-        0.16 + Math.sin(t * Math.PI) * 2,
+        0.16 + (1 - t) * 0.9 + Math.sin(t * Math.PI) * (b.height || 2),
         THREE.MathUtils.lerp(b.fromZ, b.z, t),
       );
       mesh.rotation.z = t * 8;
       mesh.visible =
-        b.f === this.floor && (!me || canObserve(me, b, state.doors, this.visibleRooms));
+        !b.impacted &&
+        b.f === this.floor &&
+        (observer || !me || canObserve(me, b, state.doors, this.visibleRooms));
     }
     for (const [id, mesh] of this.projectiles)
       if (!flyingIds.has(id)) {
@@ -1123,6 +1177,20 @@ export class GameScene {
         light.position.set(p.x, 1.35, p.z);
         light.target.position.set(p.x + Math.sin(p.angle) * 8, 0.2, p.z + Math.cos(p.angle) * 8);
       }
+    }
+    this.throwAim.visible = this.throwLanding.visible = !!me?.charging && !observer;
+    if (this.throwAim.visible) {
+      const trajectory = bottleTrajectory(me, state.doors, me.throwCharge);
+      const points = Array.from({ length: 33 }, (_, i) => {
+        const t = i / 32;
+        return new THREE.Vector3(
+          me.x + (trajectory.x - me.x) * t,
+          0.16 + (1 - t) * 0.9 + Math.sin(t * Math.PI) * trajectory.height,
+          me.z + (trajectory.z - me.z) * t,
+        );
+      });
+      this.throwAim.geometry.setFromPoints(points);
+      this.throwLanding.position.set(trajectory.x, 0.12, trajectory.z);
     }
     this.renderer.render(this.scene, this.camera);
   }

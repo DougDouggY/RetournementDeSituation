@@ -191,6 +191,12 @@ test('torch, bottle collision and inventory controlled by authority', () => {
   assert.equal(p.bottles, 0);
   assert.equal(s.thrown.length, 3);
   for (const b of s.thrown) assert.ok(!blocked(b.f, b.x, b.z, s.doorStates, 0.04));
+  assert.equal(
+    s.noises.some((n) => n.radius === 16),
+    false,
+    'noise waits for impact',
+  );
+  for (let i = 0; i < 20; i++) s.tick(0.05);
   assert.ok(s.noises.some((n) => n.radius === 16));
 });
 test('capture, continuous 2.5-second rescue, 75-second elimination', () => {
