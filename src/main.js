@@ -1,0 +1,614 @@
+import '@fontsource/barlow-condensed/latin-800.css';
+import '@fontsource/barlow-condensed/latin-600.css';
+import '@fontsource/dm-sans/latin-400.css';
+import '@fontsource/dm-sans/latin-600.css';
+import './style.css';
+import { GameScene } from './scene.js';
+import { Sound } from './audio.js';
+import {
+  FLOORS,
+  doors,
+  hides,
+  devices,
+  stairs,
+  distance,
+  roomAt,
+  lineClear,
+} from '../shared/map.js';
+const SOLO_ONLY = import.meta.env.VITE_SOLO_ONLY === '1';
+const $ = (s) => document.querySelector(s);
+$('#app').innerHTML = `
+<div id="world" aria-label="Scène de jeu en trois dimensions"></div><div class="grain"></div><div class="vignette"></div>
+<header id="masthead"><a class="brand" href="/" aria-label="Accueil"><span class="brand-symbol">↶</span><span>RDS<span class="brand-sub">UN TRÈS MAUVAIS PLAN</span></span></a><div class="edition"><span class="status-dot"></span> SOLO · HORREUR · MAUVAISES DÉCISIONS <span class="version">VOL. 01 / LA MAISON</span></div></header>
+<main id="menu"><div class="eyebrow"><span></span> LES CHASSEURS ONT UN PROBLÈME.</div><h1>RETOURNEMENT<br>DE <em>SITUATION</em><span class="title-dot">.</span></h1><p class="tagline">Cette fois, ce sont eux qui vous cherchent.</p><p class="pitch">Un tueur. Huit invités très contrariés.<br>Une nuit pour regretter d’être venus.</p><div class="solo-selection" role="group" aria-label="Personnage solo"><span>VOTRE MASQUE</span><button data-solo-character="0" class="selected" aria-pressed="true">DIAG</button><button data-solo-character="1" aria-pressed="false">Swonni</button></div><button id="solo" class="primary">Jouer en solo <span>↗</span></button><details class="coop-options"><summary>Coopération à deux · pour plus tard</summary><div class="menu-actions"><button id="create" class="primary"><span>Créer une partie</span><span>↗</span></button><button id="join-open" class="secondary">Rejoindre une partie <span>+</span></button></div></details><div class="menu-bottom"><button id="settings-open" class="text-button">⚙ &nbsp;Paramètres</button><span>1 JOUEUR <i>·</i> AUCUN CODE REQUIS</span></div><div class="join-panel hidden" id="join-panel"><label for="join-code">CODE D’INVITATION</label><div><input id="join-code" maxlength="6" placeholder="ABC123" autocomplete="off" spellcheck="false"><button id="join" class="primary">Entrer ↗</button></div></div></main>
+<div id="scene-caption"><span class="tiny">01 / RÉSIDENCE DES ÉRABLES</span><strong>La soirée vient<br>de mal tourner.</strong><p>Ils étaient venus pour faire peur.<br>Ils vont apprendre à se cacher.</p><div class="caption-line"></div><span class="tiny">QUELQUE PART, BEAUCOUP TROP LOIN DES SECOURS.</span></div>
+<footer id="footer"><span>UNE NUIT. UN MASQUE. ZÉRO PLAN B.</span><span>CASQUE CONSEILLÉ <span class="headphone">♬</span></span></footer>
+<section id="lobby" class="panel hidden"><div class="eyebrow">LA PORTE EST ENCORE OUVERTE.</div><h2>Bienvenue dans<br>les ennuis.</h2><p>Partagez ce code avec votre partenaire.</p><button id="copy-code" title="Copier le code"><strong id="room-code"></strong><span>Copier ↗</span></button><div class="roles"><button data-character="0"><span class="mask-icon diag">◈</span><strong>DIAG</strong><small>LE MAUVAIS PRESSENTIMENT</small><span class="role-status"></span></button><button data-character="1"><span class="mask-icon swonni">◈</span><strong>Swonni</strong><small>LA PIRE DES BONNES IDÉES</small><span class="role-status"></span></button></div><p id="lobby-status"></p><button id="start" class="primary" disabled>Commencer la nuit <span>↗</span></button><button id="practice" class="text-button">Jouer seul avec ce personnage</button><button id="leave" class="text-button">← Quitter le salon</button><p class="lobby-help">ZQSD / WASD · Marcher &nbsp; E · Interagir<br>Maj · Courir &nbsp; Ctrl / C · S’accroupir &nbsp; F · Lampe</p></section>
+<div id="hud" class="hidden"><div class="hud-top"><div class="night"><span class="tiny">TENIR JUSQU’À L’AUBE</span><strong id="timer">09:00</strong><span id="floor-name"></span></div><div class="room-tag"><span id="mode-label">SALON</span> <b id="hud-code"></b><button id="hud-settings" aria-label="Paramètres">☷</button></div></div><div id="team"></div><div id="toast" role="status"></div><div id="dialogue"></div><div id="intro" class="hidden"><div class="eyebrow">ÇA NE SE PASSE PAS COMME PRÉVU.</div><h2>LES PROIES ONT<br>CHANGÉ DE CAMP.</h2><p>Cachez-vous. Ils arrivent dans <b id="intro-count">10</b> secondes.</p></div><div class="hud-bottom"><div class="stealth"><span id="stealth-label">DISCRET</span><div class="meter"><i id="stamina"></i></div><span id="inventory">G · BOUTEILLES × 3</span></div><div id="interaction"></div><div class="control-help"><kbd>E</kbd> interagir <kbd>F</kbd> lampe <kbd>Tab</kbd> équipe</div></div><div id="rescue-bar" class="hidden"><span>DÉTACHER LE PARTENAIRE</span><div class="meter"><i></i></div></div><div id="connection" class="hidden"></div><div id="scoreboard" class="panel hidden"><div class="eyebrow">ON FAIT LE POINT.</div><h2>État de la nuit</h2><div id="scoreboard-content"></div><p id="rules">Survivez 9 minutes. E : portes, cachettes, escaliers et objets.<br>G : lancer une bouteille vers la souris.<br>Capturé ? Votre partenaire dispose de 75 secondes pour vous libérer.<br>Maintenir E à proximité pendant 2,5 secondes.<br>Les paramètres ne mettent pas la partie en pause.</p></div></div>
+<section id="end" class="panel hidden"><div class="eyebrow" id="end-eyebrow"></div><h2 id="end-title"></h2><p id="end-text"></p><button id="restart" class="primary">Encore une mauvaise idée ↗</button><button id="end-leave" class="text-button">Retour à l’accueil</button></section>
+<dialog id="settings"><button class="close" id="settings-close" aria-label="Fermer">×</button><div class="eyebrow">UN PEU DE CONTRÔLE.</div><h2>Paramètres</h2><label>Ambiance / musique<input id="music" type="range" min="0" max="100" value="22"></label><label>Effets sonores<input id="effects" type="range" min="0" max="100" value="55"></label><label>Voix des invités<input id="voices" type="range" min="0" max="100" value="55"></label><label class="check"><input id="quality" type="checkbox"> Mode performances (sans ombres)</label><p>Déplacement : ZQSD ou WASD / flèches<br>Courir : Maj · S’accroupir : Ctrl ou C<br>E : interagir / maintenir pour sauver · F : lampe<br>G : lancer · Tab : équipe · Échap : paramètres<br><br>En multijoueur, la nuit continue dans les paramètres.<br>Voix françaises : synthèse vocale du navigateur, si disponible.</p></dialog><div id="error" role="alert" class="hidden"></div>`;
+if (SOLO_ONLY) {
+  $('.coop-options').classList.add('hidden');
+}
+let scene;
+try {
+  scene = new GameScene($('#world'));
+} catch (err) {
+  $('#error').textContent =
+    'WebGL indisponible. Activez l’accélération graphique du navigateur puis rechargez la page.';
+  $('#error').classList.remove('hidden');
+  throw err;
+}
+const sound = new Sound();
+let ws = null,
+  state = null,
+  myId = null,
+  code = null,
+  token = null,
+  connected = false,
+  joining = false,
+  retry = 0,
+  retryTimer = null,
+  lastStateAt = 0,
+  lastEvent = 0,
+  lastToastAt = 0,
+  angle = 0,
+  aimed = false,
+  keys = new Set(),
+  lastInput = 0,
+  lastFrame = performance.now(),
+  frames = 0,
+  measureAt = performance.now(),
+  fps = 0,
+  manualLeave = false;
+let soloWorker = null,
+  soloCharacter = 0;
+let settings = null;
+try {
+  settings = JSON.parse(localStorage.getItem('rds-settings') || 'null');
+} catch {
+  localStorage.removeItem('rds-settings');
+}
+if (settings) {
+  for (const name of ['music', 'effects', 'voices']) {
+    sound.volumes[name] = settings[name] ?? sound.volumes[name];
+    $(`#${name}`).value = sound.volumes[name] * 100;
+  }
+  $('#quality').checked = !!settings.low;
+  scene.setQuality(!!settings.low);
+}
+function showError(message) {
+  $('#error').textContent = message;
+  $('#error').classList.remove('hidden');
+  setTimeout(() => $('#error').classList.add('hidden'), 6500);
+}
+function send(data) {
+  if (soloWorker) {
+    soloWorker.postMessage(data);
+    return;
+  }
+  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
+}
+function showSettings() {
+  keys.clear();
+  send({ type: 'input', x: 0, z: 0 });
+  $('#settings').showModal();
+  if (soloWorker) send({ type: 'pause', paused: true });
+}
+$('#settings-open').onclick = showSettings;
+$('#hud-settings').onclick = showSettings;
+$('#settings-close').onclick = () => $('#settings').close();
+$('#settings').addEventListener('close', () => {
+  if (soloWorker) send({ type: 'pause', paused: document.hidden });
+});
+for (const name of ['music', 'effects', 'voices'])
+  $(`#${name}`).oninput = (e) => {
+    sound.volumes[name] = Number(e.target.value) / 100;
+    sound.apply();
+    saveSettings();
+  };
+function saveSettings() {
+  localStorage.setItem(
+    'rds-settings',
+    JSON.stringify({ ...sound.volumes, low: $('#quality').checked }),
+  );
+}
+$('#quality').onchange = () => {
+  scene.setQuality($('#quality').checked);
+  saveSettings();
+};
+$('#join-open').onclick = () => {
+  $('#join-panel').classList.toggle('hidden');
+  $('#join-code').focus();
+};
+$('#join-code').oninput = (e) =>
+  (e.target.value = e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''));
+$('#join-code').onkeydown = (e) => {
+  if (e.key === 'Enter') $('#join').click();
+};
+$('#join').onclick = () => {
+  const value = $('#join-code').value.trim().toUpperCase();
+  if (!/^[A-HJ-NP-Z2-9]{6}$/.test(value)) {
+    showError('Entrez le code à 6 caractères de votre partenaire.');
+    return;
+  }
+  connect(value);
+};
+for (const button of document.querySelectorAll('[data-solo-character]'))
+  button.onclick = () => {
+    soloCharacter = Number(button.dataset.soloCharacter);
+    for (const other of document.querySelectorAll('[data-solo-character]')) {
+      const selected = other === button;
+      other.classList.toggle('selected', selected);
+      other.setAttribute('aria-pressed', String(selected));
+    }
+  };
+function startSolo() {
+  leave();
+  sound.start();
+  keys.clear();
+  myId = 'solo-player';
+  code = 'SOLO';
+  connected = true;
+  soloWorker = new Worker(new URL('./solo-worker.js', import.meta.url), { type: 'module' });
+  soloWorker.onmessage = ({ data }) => {
+    state = data;
+    lastStateAt = performance.now();
+    updateUI();
+  };
+  soloWorker.onerror = () => {
+    leave();
+    showError('Le mode solo n’a pas pu démarrer. Rechargez la page et réessayez.');
+  };
+  soloWorker.postMessage({ type: 'init', character: soloCharacter });
+}
+$('#solo').onclick = startSolo;
+$('#create').onclick = async () => {
+  if (joining) return;
+  joining = true;
+  $('#create').disabled = true;
+  sound.start();
+  try {
+    const res = await fetch('/api/rooms', { method: 'POST' });
+    if (!res.ok) throw new Error('Le serveur ne peut pas créer de salon pour le moment.');
+    const data = await res.json();
+    joining = false;
+    connect(data.code);
+  } catch (e) {
+    joining = false;
+    showError(e.message);
+  } finally {
+    $('#create').disabled = false;
+  }
+};
+function connect(newCode, reconnect = false) {
+  if (joining) return;
+  joining = true;
+  manualLeave = false;
+  sound.start();
+  code = newCode;
+  token = sessionStorage.getItem(`rds-${code}`) || crypto.randomUUID();
+  sessionStorage.setItem(`rds-${code}`, token);
+  const socket = new WebSocket(
+    `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/rooms/${code}/ws?token=${encodeURIComponent(token)}`,
+  );
+  ws = socket;
+  socket.onopen = () => {
+    joining = false;
+    connected = true;
+    retry = 0;
+    $('#connection').classList.add('hidden');
+  };
+  socket.onmessage = (e) => {
+    let msg;
+    try {
+      msg = JSON.parse(e.data);
+    } catch {
+      return;
+    }
+    if (msg.type === 'error') {
+      manualLeave = true;
+      showError(msg.message);
+      return;
+    }
+    if (msg.type === 'welcome') {
+      myId = msg.id;
+      $('#room-code').textContent = code;
+      $('#hud-code').textContent = code;
+      history.replaceState(null, '', `?room=${code}`);
+    }
+    if (msg.type === 'state') {
+      state = msg;
+      lastStateAt = performance.now();
+      updateUI();
+    }
+  };
+  socket.onerror = () => {};
+  socket.onclose = (e) => {
+    if (socket !== ws) return;
+    connected = false;
+    joining = false;
+    keys.clear();
+    if (manualLeave) return;
+    if (e.code === 4000 || e.code === 4001) {
+      if (!state) leave();
+      return;
+    }
+    if (!state) {
+      showError('Salon introuvable ou expiré. Vérifiez le code ou créez une nouvelle partie.');
+      return;
+    }
+    $('#connection').textContent = 'Connexion perdue · reconnexion en cours… (45 s de grâce)';
+    $('#connection').classList.remove('hidden');
+    if (++retry <= 10)
+      retryTimer = setTimeout(() => connect(code, true), Math.min(5000, retry * 800));
+    else showError('Reconnexion impossible. Revenez à l’accueil et créez un nouveau salon.');
+  };
+}
+function leave() {
+  soloWorker?.terminate();
+  soloWorker = null;
+
+  manualLeave = true;
+  clearTimeout(retryTimer);
+  ws?.close();
+  ws = null;
+  state = null;
+  myId = null;
+  code = null;
+  joining = false;
+  connected = false;
+  lastEvent = 0;
+  sound.lastEvent = 0;
+  history.replaceState(null, '', location.pathname);
+  for (const s of ['#lobby', '#hud', '#end']) $(s).classList.add('hidden');
+  for (const s of ['#menu', '#scene-caption', '#masthead', '#footer'])
+    $(s).classList.remove('hidden');
+}
+$('#leave').onclick = leave;
+$('#end-leave').onclick = leave;
+$('#copy-code').onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(code);
+    $('#copy-code span').textContent = 'Copié ✓';
+    setTimeout(() => ($('#copy-code span').textContent = 'Copier ↗'), 1500);
+  } catch {
+    showError(`Code du salon : ${code}`);
+  }
+};
+for (const b of document.querySelectorAll('[data-character]'))
+  b.onclick = () => send({ type: 'character', character: Number(b.dataset.character) });
+$('#start').onclick = () => {
+  sound.start();
+  send({ type: 'start' });
+};
+$('#practice').onclick = () => {
+  sound.start();
+  send({ type: 'start', practice: true });
+};
+$('#restart').onclick = () => send({ type: 'start', practice: state.practice });
+function setText(selector, text) {
+  const el = $(selector);
+  if (el.textContent !== text) el.textContent = text;
+}
+function updateUI() {
+  if (!state || !myId) return;
+  const me = state.players.find((p) => p.id === myId);
+  if (!me) return;
+  const lobby = state.phase === 'lobby',
+    ended = state.phase === 'ended';
+  for (const s of ['#menu', '#scene-caption', '#masthead', '#footer']) $(s).classList.add('hidden');
+  $('#lobby').classList.toggle('hidden', !lobby);
+  $('#hud').classList.toggle('hidden', lobby);
+  $('#end').classList.toggle('hidden', !ended);
+  if (lobby) {
+    for (const b of document.querySelectorAll('[data-character]')) {
+      const p = state.players.find((p) => p.character === Number(b.dataset.character));
+      b.classList.toggle('selected', p?.id === myId);
+      b.querySelector('.role-status').textContent = p
+        ? p.id === myId
+          ? 'VOUS · PRÊT'
+          : 'PARTENAIRE · PRÊT'
+        : 'EN ATTENTE';
+    }
+    const host = state.host === myId;
+    $('#start').disabled = !host || state.players.length < 2;
+    $('#start').classList.toggle('hidden', !host);
+    $('#practice').classList.toggle('hidden', !host || state.players.length !== 1);
+    setText(
+      '#lobby-status',
+      state.players.length < 2
+        ? 'Votre partenaire n’est pas encore là.'
+        : host
+          ? 'Vous êtes deux. C’est déjà trop tard.'
+          : 'Le créateur peut lancer la nuit.',
+    );
+    return;
+  }
+  setText('#mode-label', state.mode === 'solo' ? 'MODE SOLO' : 'SALON');
+  setText('#hud-code', state.mode === 'solo' ? '1 JOUEUR' : code);
+  setText(
+    '#rules',
+    state.mode === 'solo'
+      ? 'Survivez 9 minutes. E : portes, cachettes, escaliers et objets. G : lancer une bouteille vers la souris. Vous êtes seul : une capture termine la partie. Échap : paramètres et pause.'
+      : 'Survivez 9 minutes. E : portes, cachettes, escaliers et objets. G : lancer une bouteille. Maintenir E 2,5 secondes près du partenaire capturé pour le libérer avant 75 secondes.',
+  );
+  const secs = Math.ceil(state.remaining);
+  setText(
+    '#timer',
+    `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`,
+  );
+  setText('#floor-name', `${FLOORS[me.f]} · ${roomAt(me.f, me.x, me.z)?.name || 'Couloir'}`);
+  $('#intro').classList.toggle('hidden', state.phase !== 'intro');
+  setText('#intro-count', String(Math.max(0, Math.ceil(10 - state.time))));
+  const team = $('#team');
+  if (team.children.length !== state.players.length) {
+    team.replaceChildren(
+      ...state.players.map((p) => {
+        const el = document.createElement('div');
+        el.className = 'teammate';
+        el.innerHTML =
+          '<span class="team-marker"></span><div><strong></strong><span></span><div class="health"></div></div>';
+        el.dataset.id = p.id;
+        return el;
+      }),
+    );
+  }
+  for (const p of state.players) {
+    const el = [...team.children].find((e) => e.dataset.id === p.id);
+    el.classList.toggle('danger', p.status !== 'free');
+    el.querySelector('strong').textContent =
+      (p.character === 0 ? 'DIAG' : 'Swonni') + (p.id === myId ? ' · VOUS' : '');
+    el.querySelector('span:not(.team-marker)').textContent = !p.connected
+      ? 'DÉCONNECTÉ'
+      : p.status === 'captured'
+        ? `CAPTURÉ · ${Math.ceil(p.bleed)} s`
+        : p.status === 'eliminated'
+          ? 'ÉLIMINÉ'
+          : p.hidden
+            ? 'À COUVERT'
+            : p.running
+              ? 'EN FUITE'
+              : 'EN VIE';
+    el.querySelector('.health').textContent = '━ '.repeat(Math.max(0, p.hp));
+    el.querySelector('.team-marker').style.background = p.character === 0 ? '#d2ad6c' : '#87c5bc';
+  }
+  const chasing = state.guards.some((g) => g.state === 'chase' && g.target === myId);
+  setText(
+    '#stealth-label',
+    me.status === 'captured'
+      ? 'CAPTURÉ · ATTENDEZ VOTRE PARTENAIRE'
+      : me.status === 'eliminated'
+        ? 'ÉLIMINÉ · VOUS OBSERVEZ LA PIÈCE'
+        : me.hidden
+          ? 'À COUVERT · PAS INVISIBLE'
+          : chasing
+            ? 'REPÉRÉ · COUREZ !'
+            : me.torch
+              ? 'LAMPE ALLUMÉE · VISIBLE'
+              : me.running
+                ? 'BRUYANT'
+                : me.crouching
+                  ? 'PAS FEUTRÉS'
+                  : 'DISCRET',
+  );
+  $('#stealth-label').classList.toggle('alert', chasing || me.status === 'captured');
+  $('#stamina').style.width = `${me.stamina}%`;
+  setText(
+    '#inventory',
+    `G · BOUTEILLES × ${me.bottles}   /   F · LAMPE ${me.torch ? 'ON' : 'OFF'}`,
+  );
+  setText('#interaction', interaction(me));
+  $('#rescue-bar').classList.toggle('hidden', !me.rescue);
+  $('#rescue-bar i').style.width = `${(me.rescue / 2.5) * 100}%`;
+  const sb = $('#scoreboard-content');
+  sb.replaceChildren(
+    ...state.players.map((p) => {
+      const el = document.createElement('p');
+      el.textContent = `${p.character === 0 ? 'DIAG' : 'Swonni'} — ${FLOORS[p.f]} · ${p.status === 'free' ? 'Libre' : p.status === 'captured' ? 'Capturé' : 'Éliminé'}`;
+      return el;
+    }),
+  );
+  if (state.paused) {
+    $('#connection').textContent =
+      state.mode === 'solo'
+        ? 'Solo en pause · reprenez la partie en fermant les paramètres.'
+        : 'Partenaire déconnecté · nuit suspendue pendant la reconnexion (45 s maximum).';
+    $('#connection').classList.remove('hidden');
+  } else if (connected) $('#connection').classList.add('hidden');
+  for (const e of state.events) {
+    if (e.id <= lastEvent) continue;
+    lastEvent = e.id;
+    if (e.type === 'hurt' && e.player === myId) {
+      $('#hud').classList.add('hurt');
+      setTimeout(() => $('#hud').classList.remove('hurt'), 350);
+    }
+    if (
+      ['hunt', 'capture', 'rescue', 'eliminate', 'pickup', 'stairs'].includes(e.type) &&
+      (!e.player || e.player === myId || e.type === 'capture' || e.type === 'rescue')
+    ) {
+      setText('#toast', e.text);
+      lastToastAt = performance.now();
+      $('#toast').classList.add('show');
+    }
+    if (e.type === 'voice' && e.f === me.f && Math.hypot(e.x - me.x, e.z - me.z) < 16) {
+      setText('#dialogue', e.text);
+      $('#dialogue').classList.add('show');
+      setTimeout(() => $('#dialogue').classList.remove('show'), 3200);
+    }
+  }
+  if (ended) {
+    const win = state.result !== 'defeat';
+    setText('#end-eyebrow', win ? '05:47 / LE JOUR SE LÈVE.' : 'LA SOIRÉE EST TERMINÉE.');
+    setText(
+      '#end-title',
+      state.result === 'solo'
+        ? 'Vous avez tenu.'
+        : state.result === 'perfect'
+          ? 'Vivants. Tous les deux.'
+          : win
+            ? 'L’un de vous a tenu.'
+            : 'Mauvais quartier.',
+    );
+    setText(
+      '#end-text',
+      state.result === 'solo'
+        ? 'Victoire solo. Un masque, huit poursuivants, et vous avez vu l’aube.'
+        : state.result === 'perfect'
+          ? 'Victoire coopérative parfaite. Ils ne vous inviteront plus jamais.'
+          : win
+            ? 'Victoire individuelle imparfaite. Il manque quelqu’un sur la photo.'
+            : 'Les invités ont repris la maison. Les tueurs ont perdu la face.',
+    );
+    $('#restart').disabled = state.host !== myId;
+  }
+  sound.update(state, me);
+}
+function interaction(p) {
+  if (p.status !== 'free') return '';
+  if (p.hidden) return 'E · Sortir de la cachette';
+  const mate = state.players.find(
+    (o) => o.id !== p.id && o.f === p.f && o.status === 'captured' && distance(p, o) < 1.7,
+  );
+  if (mate) return 'Maintenir E · Détacher votre partenaire';
+  const near = [];
+  for (const [kind, list, range] of [
+    ['door', doors, 1.9],
+    ['hide', hides, 1.55],
+    ['stairs', stairs, 1.8],
+    ['device', devices, 1.45],
+  ])
+    for (const obj of list)
+      if (
+        obj.f === p.f &&
+        distance(p, obj) < range &&
+        (kind !== 'stairs' || obj.to !== null) &&
+        lineClear(p.f, p, obj, state.doors, true)
+      )
+        near.push({ obj, kind, dist: distance(p, obj) });
+  const n = near.sort((a, b) => a.dist - b.dist)[0];
+  if (!n) return '';
+  const { obj, kind } = n;
+  return kind === 'door'
+    ? `E · ${state.doors[obj.id] ? 'Fermer' : 'Ouvrir'} la porte`
+    : kind === 'hide'
+      ? 'E · Se cacher'
+      : kind === 'stairs'
+        ? `E · ${obj.to > p.f ? 'Monter' : 'Descendre'}`
+        : {
+            light: 'E · Interrupteur',
+            tv: 'E · Allumer la télévision',
+            alarm: 'E · Déclencher le réveil',
+            breaker: 'E · Disjoncteur',
+            bottles: 'E · Reprendre des bouteilles',
+          }[obj.type];
+}
+window.addEventListener('keydown', (e) => {
+  if (e.target instanceof HTMLInputElement) return;
+  if (
+    [
+      'Tab',
+      'ArrowUp',
+      'ArrowDown',
+      'ArrowLeft',
+      'ArrowRight',
+      'ControlLeft',
+      'ControlRight',
+      'Space',
+    ].includes(e.code)
+  )
+    e.preventDefault();
+  if (e.code === 'Escape') {
+    if (!$('#settings').open) {
+      e.preventDefault();
+      showSettings();
+    }
+    return;
+  }
+  if ($('#settings').open) return;
+  if (e.code === 'Tab') {
+    $('#scoreboard').classList.remove('hidden');
+    return;
+  }
+  keys.add(e.code);
+  if (e.repeat) return;
+  if (e.code === 'KeyE') send({ type: 'action', action: 'interact' });
+  if (e.code === 'KeyF') send({ type: 'action', action: 'torch' });
+  if (e.code === 'KeyG') send({ type: 'action', action: 'throw' });
+});
+window.addEventListener('keyup', (e) => {
+  keys.delete(e.code);
+  if (e.code === 'Tab') {
+    $('#scoreboard').classList.add('hidden');
+    e.preventDefault();
+  }
+});
+window.addEventListener('blur', () => {
+  keys.clear();
+  send({ type: 'input', x: 0, z: 0 });
+});
+document.addEventListener('visibilitychange', () => {
+  if (soloWorker) {
+    send({ type: 'pause', paused: document.hidden || $('#settings').open });
+  }
+  if (document.hidden) {
+    keys.clear();
+    send({ type: 'input', x: 0, z: 0 });
+  }
+});
+window.addEventListener('mousemove', (e) => {
+  const me = state?.players.find((p) => p.id === myId);
+  if (me) {
+    angle = scene.aim(e.clientX, e.clientY, me);
+    aimed = true;
+  }
+});
+const held = (...codes) => codes.some((c) => keys.has(c));
+function frame(now) {
+  const dt = Math.min(0.08, (now - lastFrame) / 1000);
+  lastFrame = now;
+  frames++;
+  if (now - measureAt > 1000) {
+    fps = Math.round((frames * 1000) / (now - measureAt));
+    frames = 0;
+    measureAt = now;
+  }
+  if (now - lastInput > 50 && state && ['intro', 'playing'].includes(state.phase) && connected) {
+    lastInput = now;
+    const blocked = $('#settings').open;
+    const x = blocked
+        ? 0
+        : Number(held('KeyD', 'ArrowRight')) - Number(held('KeyA', 'KeyQ', 'ArrowLeft')),
+      z = blocked ? 0 : Number(held('KeyS', 'ArrowDown')) - Number(held('KeyW', 'KeyZ', 'ArrowUp'));
+    if (!aimed && (x || z)) angle = Math.atan2(x, z);
+    send({
+      type: 'input',
+      x,
+      z,
+      angle,
+      run: !blocked && held('ShiftLeft', 'ShiftRight'),
+      crouch: !blocked && held('ControlLeft', 'ControlRight', 'KeyC'),
+      use: !blocked && held('KeyE'),
+    });
+  }
+  if (now - lastToastAt > 4500) $('#toast').classList.remove('show');
+  scene.update(state, myId, dt);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+// Read-only diagnostics for tests and performance inspection; no simulation controls exposed.
+Object.defineProperty(window, '__RDS', {
+  get: () => ({
+    state,
+    myId,
+    connected,
+    fps,
+    drawCalls: scene.renderer.info.render.calls,
+    triangles: scene.renderer.info.render.triangles,
+  }),
+});
+const invitation = new URLSearchParams(location.search).get('room');
+if (invitation && !SOLO_ONLY) {
+  $('#join-panel').classList.remove('hidden');
+  $('#join-code').value = invitation.toUpperCase();
+}
