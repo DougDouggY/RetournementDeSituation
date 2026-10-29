@@ -545,16 +545,26 @@ export class GameScene {
         emissiveIntensity: 1,
       });
       cylinder(exterior, p.x, 0.82, p.z, 0.17, 0.15, 0.06, 0x34413f);
-      const pool = lightPool(exterior, p.x, p.z, 3, 3);
+      const pool = lightPool(exterior, p.x, p.z, 7, 7);
       this.gardenFixtures.push({ glass, pool });
     }
-    for (const x of [-25, -22, -19]) {
-      const light = new THREE.PointLight(0xffd095, 5, 5, 2);
-      light.position.set(x, 0.85, 0);
+    for (const [x, z] of [
+      [-25, 0],
+      [-21, 0],
+      [-21, -8],
+      [-21, 8],
+      [0, -14],
+      [0, 14],
+      [21, 0],
+    ]) {
+      const light = new THREE.PointLight(0xffd095, 18, 16, 2);
+      light.userData.poweredIntensity = 18;
+      light.position.set(x, 2.5, z);
       exterior.add(light);
       this.gardenLights.push(light);
     }
-    const porchLight = new THREE.PointLight(0xefbe7c, 2.5, 5, 2);
+    const porchLight = new THREE.PointLight(0xefbe7c, 14, 10, 2);
+    porchLight.userData.poweredIntensity = 14;
     porchLight.position.set(-19, 2.2, 0);
     exterior.add(porchLight);
     this.gardenLights.push(porchLight);
@@ -1027,7 +1037,7 @@ export class GameScene {
     }
     const power = state?.power !== false;
     for (const light of this.gardenLights)
-      light.intensity = power ? (light === this.gardenLights.at(-1) ? 2.5 : 5) : 0;
+      light.intensity = power ? light.userData.poweredIntensity : 0;
     for (const fixture of this.gardenFixtures) {
       fixture.glass.material.emissiveIntensity = power ? 1 : 0;
       fixture.pool.visible = power;

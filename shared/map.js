@@ -36,7 +36,12 @@ const partitions = [
     [-18, -9, 0, 18],
   ],
 ];
-export const gardenLamps = [-25, -22, -19].flatMap((x) => [-1.8, 1.8].map((z) => ({ x, z })));
+export const gardenLamps = [
+  ...[-25, -22, -19].flatMap((x) => [-1.8, 1.8].map((z) => ({ x, z }))),
+  ...[-14, -5, 5, 14].flatMap((x) => [-14, 14].map((z) => ({ x, z }))),
+  ...[-7, 0, 7].map((z) => ({ x: 21, z })),
+  ...[-8, 8].map((z) => ({ x: -21, z })),
+];
 const portals = [
   { id: 'entry-west', f: 1, x: -18, z: 0, w: 0.25, d: 2.4, axis: 'z', exterior: true },
   { id: 'entry-east', f: 1, x: 18, z: 0, w: 0.25, d: 2.4, axis: 'z', exterior: true },
