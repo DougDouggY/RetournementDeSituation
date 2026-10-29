@@ -89,7 +89,7 @@ export class Sound {
       if (e.type === 'voice') this.voice(e.text.replace(/^.*? : /, ''));
       if (e.type === 'intro') this.voice(e.text);
       if (e.type === 'kill') {
-        this.noise(0.12, 0.18);
+        this.noise(0.4, 0.4);
         this.tone(90, 0.2, 0.12, 'triangle', 35);
       }
       if (e.type === 'noise') {
@@ -97,6 +97,7 @@ export class Sound {
         this.tone(320, 0.3, 0.08, 'triangle', 90);
       }
       if (e.type === 'door' || e.type === 'hide') this.tone(135, 0.2, 0.08, 'sawtooth', 70);
+      if (e.type === 'clean') this.noise(0.18, 0.08);
       if (e.type === 'switch') this.noise(0.025, 0.1);
       if (e.type === 'hurt' || e.type === 'capture') {
         this.tone(80, 0.5, 0.3, 'sawtooth', 30);

@@ -1,6 +1,6 @@
 {
   "name": "retournement-de-situation",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -18,7 +18,8 @@
     "build:solo": "npm run build",
     "build:coop": "vite build --mode production",
     "cf:solo": "npm run build && wrangler dev",
-    "deploy:coop": "npm run build:coop && wrangler deploy --config wrangler.coop.jsonc"
+    "deploy:coop": "npm run build:coop && wrangler deploy --config wrangler.coop.jsonc",
+    "test:party": "node tests/party-browser.mjs"
   },
   "dependencies": {
     "@fontsource/barlow-condensed": "5.2.6",

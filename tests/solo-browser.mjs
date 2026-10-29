@@ -26,7 +26,7 @@ try {
       '--disable-dev-shm-usage',
     ],
   });
-  page = await browser.newPage({ viewport: { width: 1100, height: 800 } });
+  page = await browser.newPage({ viewport: { width: 800, height: 600 } });
   const errors = [],
     apiRequests = [],
     sockets = [];
@@ -125,13 +125,22 @@ try {
     'PASS external breaker cuts and restores room lights, path lamps and glowing windows',
   );
   await page.keyboard.down('KeyS');
-  await page.waitForFunction(() => window.__RDS.state.players[0].z > 6.55);
+  await page.waitForFunction(() => window.__RDS.state.players[0].z > 6.1, null, { polling: 50 });
   await page.keyboard.up('KeyS');
   await page.waitForFunction(() => window.__RDS.visibleRooms.includes('r1-3'));
   assert.equal(await page.evaluate(() => window.__RDS.state.doors['window-office']), false);
   await page.screenshot({ path: 'test-results/window-scouting.png' });
   await page.keyboard.down('KeyE');
   await page.waitForFunction(() => window.__RDS.state.doors['window-office'] === true);
+  await page.waitForFunction(() => window.__RDS.windowSlides['window-office'].height > 1.25);
+  assert.equal(
+    await page.evaluate(() => {
+      const w = window.__RDS.windowSlides['window-office'];
+      return w.angle === w.baseAngle;
+    }),
+    true,
+    'window must slide vertically without swinging',
+  );
   await page.keyboard.up('KeyE');
   await page.keyboard.press('KeyV');
   await page.waitForFunction(

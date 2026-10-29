@@ -125,6 +125,40 @@ function prop(f, room, type, x, z, w, d, options = {}) {
     w *= sx;
     d *= sz;
   }
+  // Large furniture rests against a wall, with its access face kept clear.
+  if (r && ['wardrobe', 'fridge'].includes(type)) x = r.x + r.w / 2 - w / 2 - 0.14;
+  if (r && ['shelf', 'counter', 'tv', 'sink', 'washer', 'bath', 'bed'].includes(type)) {
+    if (d > w && type !== 'bed') x = r.x + r.w / 2 - w / 2 - 0.14;
+    else z = r.z + (r.z < 0 ? -1 : 1) * (r.d / 2 - d / 2 - 0.14);
+  }
+  if (r && type === 'plant') {
+    x = r.x + r.w / 2 - w / 2 - 0.3;
+    z = r.z + (r.z < 0 ? 1 : -1) * (r.d / 2 - d / 2 - 1);
+    if (props.some((p) => p.room === room && p.solid && inside(x, z, p, Math.max(w, d) / 2))) {
+      x = r.x - r.w / 2 + w / 2 + 0.3;
+      z = r.z;
+    }
+  }
+  // Leave a landing beside the glass; shorten long wall units when necessary.
+  for (const win of portals.filter((win) => win.room === room)) {
+    if (win.axis === 'z' && Math.abs(x - win.x) < w / 2 + 1.6 && Math.abs(z - win.z) < d / 2 + 1) {
+      const low = r.z - r.d / 2 + 0.14,
+        high = r.z + r.d / 2 - 0.14;
+      const side = win.z - low > high - win.z ? -1 : 1;
+      d = Math.min(d, (side < 0 ? win.z - low : high - win.z) - 1.2);
+      z = win.z + side * (1.2 + d / 2);
+    }
+    if (win.axis !== 'z' && Math.abs(z - win.z) < d / 2 + 1.6 && Math.abs(x - win.x) < w / 2 + 1) {
+      const low = r.x - r.w / 2 + 0.14,
+        high = r.x + r.w / 2 - 0.14;
+      const side = win.x - low > high - win.x ? -1 : 1;
+      w = Math.min(w, (side < 0 ? win.x - low : high - win.x) - 1.2);
+      x = win.x + side * (1.2 + w / 2);
+    }
+  }
+  if (r?.cutout && inside(x, z, r.cutout, Math.max(w, d) / 2 + 0.15)) {
+    z = r.cutout.z + (r.z < 0 ? -1 : 1) * (r.cutout.d / 2 + d / 2 + 0.15);
+  }
   const p = { id: `p${id++}`, f, room, type, x, z, w, d, solid: true, ...options };
   props.push(p);
   if (options.hide)
@@ -201,7 +235,14 @@ for (let f = 0; f < 3; f++) {
       rooms.push(r);
       const boundary = row ? 2 : -2;
       if (col > 0) wall(f, left, z, 0.2, 10);
-      wall(f, (left + x - 1) / 2, boundary, x - 1 - left, 0.2);
+      // An entrance recess gives selected rooms an L-shaped footprint.
+      const notch = index % 2 === 1 ? Math.min(2.4, r.w / 4) : 0;
+      if (notch) {
+        r.cutout = { x: left + notch / 2, z: boundary + (row ? 1 : -1), w: notch, d: 2 };
+        wall(f, left + notch / 2, boundary + (row ? 2 : -2), notch, 0.2);
+        wall(f, left + notch, boundary + (row ? 1 : -1), 0.2, 2);
+      }
+      wall(f, (left + notch + x - 1) / 2, boundary, x - 1 - left - notch, 0.2);
       wall(f, (x + 1 + right) / 2, boundary, right - x - 1, 0.2);
       doors.push({ id: `d${f}-${index}`, f, x, z: boundary, w: 2, d: 0.22, room: r.id });
       device(f, r.id, 'light', x - 2, boundary + (row ? 0.8 : -0.8));
@@ -266,7 +307,13 @@ prop(1, 'outside', 'plant', -20, -5, 1, 1);
 prop(1, 'outside', 'boxes', 23, 8, 2, 1.8, { hide: true });
 device(1, 'outside', 'breaker', -18.8, 4);
 export function roomAt(f, x, z) {
-  return rooms.find((r) => r.f === f && Math.abs(x - r.x) < r.w / 2 && Math.abs(z - r.z) < r.d / 2);
+  return rooms.find(
+    (r) =>
+      r.f === f &&
+      Math.abs(x - r.x) < r.w / 2 &&
+      Math.abs(z - r.z) < r.d / 2 &&
+      (!r.cutout || !inside(x, z, r.cutout)),
+  );
 }
 export function distance(a, b) {
   return Math.hypot(a.x - b.x, a.z - b.z);
@@ -446,4 +493,30 @@ export function windowLanding(p, d, states = {}) {
         return dest;
     }
   return null;
+}
+
+// Rectangular patches cover the exact L-shaped floor without filling its hallway recess.
+export function roomFloorParts(r) {
+  if (!r.cutout) return [r];
+  const c = r.cutout,
+    top = r.z < 0;
+  return [
+    { x: r.x, z: r.z + (top ? -c.d / 2 : c.d / 2), w: r.w, d: r.d - c.d },
+    { x: r.x + c.w / 2, z: c.z, w: r.w - c.w, d: c.d },
+  ];
+}
+
+// Access points face usable floor space rather than the wall behind the furniture.
+for (const h of hides) {
+  const p = props.find((p) => p.id === h.prop);
+  const candidates = [
+    { x: p.x, z: p.z + p.d / 2 + 0.65 },
+    { x: p.x, z: p.z - p.d / 2 - 0.65 },
+    { x: p.x - p.w / 2 - 0.65, z: p.z },
+    { x: p.x + p.w / 2 + 0.65, z: p.z },
+  ];
+  const access = candidates.find(
+    (a) => !blocked(h.f, a.x, a.z, {}, 0.35, true) && regionAt(h.f, a.x, a.z) === p.room,
+  );
+  if (access) Object.assign(h, access);
 }

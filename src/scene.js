@@ -14,6 +14,7 @@ import {
   canObserve,
   gardenLamps,
   windowNormal,
+  roomFloorParts,
 } from '../shared/map.js';
 const palettes = [
   { floor: 0x4c5550, wall: 0x61736b },
@@ -625,13 +626,29 @@ export class GameScene {
       group.add(roomGroup);
       this.roomMeshes.set(r.id, roomGroup);
       const palette = palettes[r.style];
-      box(roomGroup, r.x, -0.015, r.z, r.w - 0.2, 0.1, r.d - 0.2, palette.floor, 0);
-      // Plank seams, tiled bathrooms and a room name integrated into the floor.
-      for (let x = r.x - r.w / 2 + 0.5; x < r.x + r.w / 2; x += r.name.includes('bains') ? 1 : 1.2)
-        box(roomGroup, x, 0.04, r.z, 0.018, 0.008, r.d - 0.2, 0x323e38, 0);
-      if (r.name.includes('bains'))
-        for (let z = r.z - r.d / 2 + 0.5; z < r.z + r.d / 2; z++)
-          box(roomGroup, r.x, 0.045, z, r.w - 0.2, 0.008, 0.018, 0x455952, 0);
+      for (const part of roomFloorParts(r)) {
+        box(roomGroup, part.x, -0.015, part.z, part.w - 0.1, 0.1, part.d - 0.1, palette.floor, 0);
+        for (
+          let x = part.x - part.w / 2 + 0.5;
+          x < part.x + part.w / 2;
+          x += r.name.includes('bains') ? 1 : 1.2
+        )
+          box(roomGroup, x, 0.04, part.z, 0.018, 0.008, part.d - 0.1, 0x323e38, 0);
+        if (r.name.includes('bains'))
+          for (let z = part.z - part.d / 2 + 0.5; z < part.z + part.d / 2; z++)
+            box(roomGroup, part.x, 0.045, z, part.w - 0.1, 0.008, 0.018, 0x455952, 0);
+      }
+      if (r.cutout)
+        box(
+          hall,
+          r.cutout.x,
+          0.005,
+          r.cutout.z,
+          r.cutout.w - 0.1,
+          0.04,
+          r.cutout.d - 0.1,
+          0x85765c,
+        );
       const text = label(r.name.toUpperCase());
       text.position.set(r.x, 0.07, r.z + (r.z < 0 ? 3.5 : -3.5));
       roomGroup.add(text);
@@ -669,6 +686,11 @@ export class GameScene {
       pivot.userData.baseAngle = pivot.rotation.y;
       doorGroup.add(pivot);
       if (d.window) {
+        pivot.userData.sliding = true;
+        const frame = new THREE.Group();
+        frame.position.copy(pivot.position);
+        frame.rotation.copy(pivot.rotation);
+        doorGroup.add(frame);
         const pane = box(pivot, 1, 1.5, 0, 1.92, 1.3, 0.045, 0x9cbbb8);
         pane.material = new THREE.MeshStandardMaterial({
           color: 0xb6d5ce,
@@ -680,8 +702,13 @@ export class GameScene {
           depthWrite: false,
         });
         this.windowGlass.set(d.id, { mesh: pane, room: d.room });
-        for (const x of [0, 1, 2]) box(pivot, x, 1.5, 0.02, 0.065, 1.42, 0.08, 0xb8af96);
-        for (const y of [0.8, 1.5, 2.2]) box(pivot, 1, y, 0.02, 2.08, 0.065, 0.08, 0xb8af96);
+        const upperPane = box(frame, 1, 2.85, -0.06, 1.92, 1.3, 0.045, 0x9cbbb8);
+        upperPane.material = pane.material;
+        for (const x of [0, 2]) box(frame, x, 2.15, 0, 0.1, 2.82, 0.16, 0xb8af96);
+        for (const y of [0.8, 2.2, 3.5]) box(frame, 1, y, -0.03, 2.08, 0.08, 0.16, 0xb8af96);
+        for (const x of [0.06, 1.94]) box(pivot, x, 1.5, 0.05, 0.065, 1.3, 0.08, 0xb8af96);
+        for (const y of [0.85, 2.15]) box(pivot, 1, y, 0.05, 1.94, 0.065, 0.08, 0xb8af96);
+        box(pivot, 1, 0.95, 0.12, 0.3, 0.06, 0.08, 0xc2a166);
         const base = box(
           doorGroup,
           d.x,
@@ -692,7 +719,7 @@ export class GameScene {
           d.axis === 'z' ? 2.08 : 0.24,
           0x7d8c7b,
         );
-        box(pivot, 1, 0.74, 0.1, 2.16, 0.12, 0.32, 0xc0b69a);
+        box(frame, 1, 0.74, 0.1, 2.16, 0.12, 0.32, 0xc0b69a);
       } else {
         const leaf = box(pivot, 1, 1, 0, 1.94, 2, 0.13, 0x6a5440);
         leaf.material = leaf.material.clone();
@@ -840,8 +867,12 @@ export class GameScene {
         : speed > 0.2
           ? Math.abs(Math.sin(a.phase)) * 0.06
           : Math.sin(t * 2) * 0.02;
+    if (p.cleaning) {
+      a.body.position.y = -0.5;
+      a.arms[1].rotation.x = -0.5 + Math.sin(t * 16) * 0.45;
+    }
     if (p.climb) a.body.position.y = 0;
-    a.body.rotation.x = p.climb ? 0.5 : crouch ? 0.32 : captured ? 0.2 : 0;
+    a.body.rotation.x = p.climb ? 0.5 : p.cleaning ? 0.85 : crouch ? 0.32 : captured ? 0.2 : 0;
     a.body.rotation.z = eliminated ? 1.4 : p.invuln > 1.3 ? Math.sin(t * 40) * 0.1 : 0;
     a.hideAmount = THREE.MathUtils.damp(a.hideAmount || 0, p.hidden ? 1 : 0, 13, dt);
     a.root.visible = p.f === this.floor && a.hideAmount < 0.98 && p.alive !== false;
@@ -938,8 +969,13 @@ export class GameScene {
           a.root.visible = false;
         }
       for (const [id, pivot] of this.doorMeshes) {
-        const angle = (pivot.userData.baseAngle || 0) + (state.doors[id] ? Math.PI * 0.48 : 0);
-        pivot.rotation.y += (angle - pivot.rotation.y) * Math.min(1, dt * 9);
+        if (pivot.userData.sliding) {
+          const height = state.doors[id] ? 1.3 : 0;
+          pivot.position.y += (height - pivot.position.y) * Math.min(1, dt * 7);
+        } else {
+          const angle = (pivot.userData.baseAngle || 0) + (state.doors[id] ? Math.PI * 0.48 : 0);
+          pivot.rotation.y += (angle - pivot.rotation.y) * Math.min(1, dt * 9);
+        }
       }
       for (const [id, light] of this.lightMeshes)
         light.intensity = state.power !== false && state.lights[id] ? 22 : 0;
@@ -978,7 +1014,7 @@ export class GameScene {
       const actor = this.bodyMeshes.get(b.id);
       actor.root.position.set(b.x, 0.28, b.z);
       actor.root.rotation.y = b.angle;
-      actor.root.visible = !!me && canObserve(me, b, state.doors, this.visibleRooms);
+      actor.root.visible = !b.hidden && !!me && canObserve(me, b, state.doors, this.visibleRooms);
     }
     for (const [id, actor] of this.bodyMeshes)
       if (!state?.bodies?.some((b) => b.id === id)) actor.root.visible = false;
