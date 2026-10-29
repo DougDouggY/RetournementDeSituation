@@ -19,6 +19,10 @@ Pour jouer depuis deux ordinateurs sur Internet, déployer le Worker ci-dessous 
 
 Conserver les commandes déjà configurées dans Cloudflare : **Build command** `npm run build` ; **Deploy command** `npx wrangler deploy` ; **Root directory** `/` ; branche `main`. Le build par défaut produit maintenant le solo et `wrangler.jsonc` cible le Worker statique **retournement-de-situation-solo**. Aucun changement de menu ni jeton supplémentaire dans le chat n’est nécessaire. Après l’envoi GitHub, un nouveau build doit se lancer si les déploiements automatiques de `main` sont activés.
 
+### Si les mises à jour GitHub ne déclenchent aucun build
+
+Dans Settings → Builds, le bandeau « This project is disconnected from your Git account » signale que l’application GitHub Cloudflare n’a plus accès au dépôt. Le bouton Manage ouvre les autorisations GitHub : ajouter `DougDouggY/RetournementDeSituation` aux dépôts autorisés, puis enregistrer. Il est aussi possible d’autoriser tous ses dépôts, si c’est le périmètre souhaité pour Cloudflare. Après reconnexion, un nouvel envoi sur `main` permet de déclencher un build avec la dernière version du jeu.
+
 ## Publier le solo depuis GitHub sur Cloudflare Pages
 
 Le dépôt GitHub est `DougDouggY/RetournementDeSituation` ; utiliser la branche **main**. Dans Cloudflare, créer un projet **Pages**, choisir la connexion GitHub puis ce dépôt.
