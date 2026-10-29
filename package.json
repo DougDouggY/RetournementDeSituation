@@ -5,17 +5,20 @@
   "type": "module",
   "scripts": {
     "dev": "node server/local.js",
-    "build": "vite build",
+    "build": "vite build --mode solo",
     "test": "node --test --test-isolation=none tests/*.test.js",
-    "test:browser": "npm run build && node tests/browser.mjs",
-    "cf:dev": "npm run build && wrangler dev",
+    "test:browser": "npm run build:coop && node tests/browser.mjs",
+    "cf:dev": "npm run build:coop && wrangler dev --config wrangler.coop.jsonc",
     "deploy": "npm run build && wrangler deploy",
     "test:cloudflare": "node tests/cloudflare.mjs",
     "format": "prettier --write src shared server tests vite.config.js",
     "start": "node server/local.js --production",
-    "deploy:solo": "npm run build:solo && wrangler deploy --config wrangler.solo.jsonc",
+    "deploy:solo": "npm run deploy",
     "test:solo": "npm run build:solo && node tests/solo-browser.mjs",
-    "build:solo": "vite build --mode solo"
+    "build:solo": "npm run build",
+    "build:coop": "vite build --mode production",
+    "cf:solo": "npm run build && wrangler dev",
+    "deploy:coop": "npm run build:coop && wrangler deploy --config wrangler.coop.jsonc"
   },
   "dependencies": {
     "@fontsource/barlow-condensed": "5.2.6",

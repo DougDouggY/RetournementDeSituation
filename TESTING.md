@@ -52,3 +52,7 @@ Le test navigateur solo passe avec les API de jeu bloquées : départ dans le ja
 La lecture de l’URL publique fournie par l’utilisateur est refusée par le proxy réseau de cet environnement (HTTP CONNECT 403). Cela ne démontre pas une panne du site Cloudflare et empêche de confirmer ici l’activation distante d’une nouvelle version. La vérification locale et la confirmation de l’envoi GitHub sont distinctes du déploiement public.
 
 La régression navigateur coopérative de la version 0.2 passe : deux clients indépendants, départ dans le jardin, entrée ouest synchronisée, mouvement, lampe, bouteille, reconnexion et victoire parfaite à la fin de la manche de test de 25 secondes. Aucune erreur JavaScript ou WebGL. Le solo publié reste à un seul personnage.
+
+## Déploiement simplifié pour les réglages Cloudflare existants
+
+La capture du tableau de bord indique `npm run build` puis `npx wrangler deploy`. Ces commandes sont désormais les valeurs par défaut du solo : compilation en mode solo et Worker statique nommé `retournement-de-situation-solo`. La configuration coopérative reste dans `wrangler.coop.jsonc`, avec les scripts explicites `build:coop` et `deploy:coop`. Vérifications : compilation par la commande exacte du tableau de bord, assemblage `wrangler deploy --dry-run` sans bindings, et test navigateur solo avec les API bloquées.

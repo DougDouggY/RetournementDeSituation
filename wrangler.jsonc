@@ -1,10 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "retournement-de-situation",
-  "main": "server/worker.js",
+  "name": "retournement-de-situation-solo",
   "compatibility_date": "2025-10-01",
-  "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
-  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "GameRoom" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }],
-  "observability": { "enabled": true }
+  "assets": { "directory": "./dist" },
+  "workers_dev": true
 }

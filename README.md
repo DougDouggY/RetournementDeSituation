@@ -15,6 +15,10 @@ Ouvrir l’adresse indiquée par Vite sur le port **5173**. Choisir **DIAG** ou 
 
 Pour jouer depuis deux ordinateurs sur Internet, déployer le Worker ci-dessous ou héberger ce serveur Node derrière un reverse proxy HTTPS prenant en charge les WebSocket. Un serveur lancé sur votre ordinateur n’est pas automatiquement accessible sur Internet.
 
+## Worker Cloudflare connecté à GitHub (configuration de l’utilisateur)
+
+Conserver les commandes déjà configurées dans Cloudflare : **Build command** `npm run build` ; **Deploy command** `npx wrangler deploy` ; **Root directory** `/` ; branche `main`. Le build par défaut produit maintenant le solo et `wrangler.jsonc` cible le Worker statique **retournement-de-situation-solo**. Aucun changement de menu ni jeton supplémentaire dans le chat n’est nécessaire. Après l’envoi GitHub, un nouveau build doit se lancer si les déploiements automatiques de `main` sont activés.
+
 ## Publier le solo depuis GitHub sur Cloudflare Pages
 
 Le dépôt GitHub est `DougDouggY/RetournementDeSituation` ; utiliser la branche **main**. Dans Cloudflare, créer un projet **Pages**, choisir la connexion GitHub puis ce dépôt.
@@ -28,7 +32,7 @@ Le dépôt GitHub est `DougDouggY/RetournementDeSituation` ; utiliser la branche
 | Dossier racine | Racine du dépôt (laisser vide) |
 | Variable d’environnement | `NODE_VERSION` = `24` |
 
-Cloudflare installe les dépendances et compile le site ; ne pas ajouter une commande `wrangler deploy` au build Pages. Le solo n’utilise aucune API de jeu, aucun Durable Object ni aucun secret côté navigateur. Une fois le déploiement réussi, ouvrir l’adresse `.pages.dev`, choisir DIAG ou Swonni puis **Jouer en solo**. Chaque mise à jour de `main` déclenche ensuite une nouvelle compilation Pages.
+Cloudflare installe les dépendances et compile le site ; ne pas ajouter une commande `wrangler deploy` au build Pages. Le solo n’utilise aucune API de jeu, aucun Durable Object ni aucun secret côté navigateur. Une fois le déploiement réussi, ouvrir l’adresse `.pages.dev`, choisir DIAG ou Swonni puis **Jouer en solo**. Chaque mise à jour de `main` déclenche ensuite une nouvelle compilation Pages. Pour un projet Workers déjà configuré, utiliser plutôt les instructions Workers ci-dessus et conserver ses commandes existantes.
 
 ## Publier le solo pour le tester
 
@@ -37,7 +41,7 @@ npm run test:solo
 npm run deploy:solo
 ```
 
-`deploy:solo` compile le mode solo puis publie uniquement les fichiers statiques via `wrangler.solo.jsonc`, sous le nom dédié **retournement-de-situation-solo**. Aucun Durable Object et aucune ressource du multijoueur ne sont requis. L’interface publiée masque les commandes coopératives ; les noms sont **DIAG** et **Swonni**. L’URL HTTPS réelle est fournie par Wrangler après une publication réussie.
+`deploy:solo` compile le mode solo puis publie uniquement les fichiers statiques via `wrangler.jsonc` (la configuration `wrangler.solo.jsonc` reste compatible), sous le nom dédié **retournement-de-situation-solo**. Aucun Durable Object et aucune ressource du multijoueur ne sont requis. L’interface publiée masque les commandes coopératives ; les noms sont **DIAG** et **Swonni**. L’URL HTTPS réelle est fournie par Wrangler après une publication réussie.
 
 La publication nécessite un compte Cloudflare authentifié. Dans cet environnement, `wrangler whoami` a confirmé qu’aucune session n’est connectée. Les besoins `CLOUDFLARE_API_TOKEN` (secret, destination `api.cloudflare.com`) et `CLOUDFLARE_ACCOUNT_ID` (non secret) sont déclarés dans le brouillon de configuration. Renseigner ces valeurs dans les paramètres sécurisés de l’environnement, jamais dans le chat ni les fichiers du dépôt. Utiliser un jeton limité au compte cible avec les droits nécessaires pour publier des Workers et leurs assets (Workers Scripts Edit et lecture des paramètres du compte). Sur son poste, `npx wrangler login` est une alternative à ce jeton.
 
@@ -73,13 +77,13 @@ Une déconnexion suspend la nuit pendant 45 secondes pour permettre la reconnexi
 
 ## Cloudflare Workers et Durable Objects
 
-Le fichier `wrangler.jsonc` définit un Worker **retournement-de-situation**, un binding `ROOMS`, une classe `GameRoom` et sa propre migration SQLite. Les fichiers statiques compilés sont servis par Workers Assets. Chaque salon dispose de sa propre autorité Durable Object. Aucun jeton n’est envoyé au client.
+Le fichier `wrangler.coop.jsonc` définit un Worker coopératif **retournement-de-situation**, un binding `ROOMS`, une classe `GameRoom` et sa propre migration SQLite. Les fichiers statiques compilés sont servis par Workers Assets. Chaque salon dispose de sa propre autorité Durable Object. Aucun jeton n’est envoyé au client.
 
 Pour servir les fichiers compilés avec Node : `npm run build` puis `npm start` (port 5173, HTTP et WebSocket).
 
 ```sh
 npm run cf:dev        # build puis exécution avec le runtime Cloudflare local
-npm run deploy       # build puis publication sur VOTRE compte Cloudflare
+npm run deploy:coop  # build coop puis publication sur VOTRE compte Cloudflare
 ```
 
 Avant un déploiement réel, s’authentifier avec `npx wrangler login` sur son poste, ou fournir les identifiants Cloudflare par un mécanisme sécurisé adapté au CI. Les droits Workers et Durable Objects sont nécessaires. Si ce nom de Worker existe déjà dans votre compte, choisir **un nouveau nom dédié à ce jeu** avant publication afin de ne rien écraser. Vérifier le compte sélectionné et les coûts des Durable Objects actifs : la simulation reste en mémoire avec une boucle à 20 Hz et ne met pas les sockets en hibernation. Les salons sans connexion sont supprimés après cinq minutes. L’arrêt d’un acteur n’est pas une sauvegarde de manche.

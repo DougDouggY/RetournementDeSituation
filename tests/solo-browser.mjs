@@ -47,6 +47,11 @@ try {
   );
   await page.goto(base);
   await page.locator('#solo').waitFor();
+  assert.equal(
+    await page.locator('.coop-options').isVisible(),
+    false,
+    'default solo build must hide multiplayer setup',
+  );
   assert.equal(await page.getByText('Swonni', { exact: true }).count(), 2);
   await page.locator('[data-solo-character="1"]').click();
   await page.locator('#solo').click();
