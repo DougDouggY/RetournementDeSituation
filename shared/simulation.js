@@ -170,6 +170,9 @@ export class Simulation {
         angle: 0,
         state: this.scenario === 'hunt' ? 'patrol' : 'party',
         home: { f, x, z },
+        socialStyle: ['talk', 'listen', 'drink', 'dance'][i % 4],
+        socialNext: 5 + i * 1.3,
+        socialSpot: null,
         alive: true,
         armed: this.scenario === 'hunt',
         path: [],
@@ -825,8 +828,49 @@ export class Simulation {
       this.navigate(g, g.goal, dt, 1.35);
     } else {
       g.state = 'party';
-      if (g.f !== g.home.f || distance(g, g.home) > 0.5) this.navigate(g, g.home, dt, 1.2);
-      else {
+      if (this.time >= g.socialNext) {
+        g.socialNext = this.time + 9 + this.random() * 10;
+        g.socialStyle = ['talk', 'listen', 'drink', 'dance'][Math.floor(this.random() * 4)];
+        g.socialSpot = null;
+        // Local steps only: stay in the same party area and avoid furniture/other guests.
+        for (let attempt = 0; attempt < 6; attempt++) {
+          const angle = this.random() * Math.PI * 2,
+            radius = 0.35 + this.random() * 0.65;
+          const spot = {
+            f: g.home.f,
+            x: g.home.x + Math.sin(angle) * radius,
+            z: g.home.z + Math.cos(angle) * radius,
+          };
+          if (
+            regionAt(spot.f, spot.x, spot.z) !== regionAt(g.home.f, g.home.x, g.home.z) ||
+            blocked(spot.f, spot.x, spot.z, this.doorStates, 0.4) ||
+            !lineClear(spot.f, g.home, spot, this.doorStates, false, false) ||
+            this.guards.some(
+              (other) =>
+                other !== g &&
+                other.alive !== false &&
+                other.f === spot.f &&
+                distance(other, spot) < 1.1,
+            )
+          )
+            continue;
+          g.socialSpot = spot;
+          break;
+        }
+      }
+      const socialSpot = g.socialSpot || g.home;
+      if (g.f !== g.home.f || distance(g, g.home) > 1.5) this.navigate(g, g.home, dt, 1.2);
+      else if (distance(g, socialSpot) > 0.12) {
+        const dx = socialSpot.x - g.x,
+          dz = socialSpot.z - g.z,
+          length = Math.hypot(dx, dz);
+        if (this.turnToward(g, Math.atan2(dx, dz), dt) < 0.5)
+          this.move(
+            g,
+            (dx / length) * Math.min(0.65 * dt, length),
+            (dz / length) * Math.min(0.65 * dt, length),
+          );
+      } else {
         const companions = this.guards.filter(
           (other) =>
             other !== g &&

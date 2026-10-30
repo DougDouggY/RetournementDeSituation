@@ -459,10 +459,20 @@ export function character(character = 0, guard = false, index = 0) {
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.045;
   root.add(ring);
+  let drink = null;
+  if (guard) {
+    drink = new THREE.Group();
+    cylinder(drink, 0, -0.64, 0.08, 0.085, 0.07, 0.2, 0xe7d5ad);
+    cylinder(drink, 0, -0.53, 0.08, 0.065, 0.065, 0.015, 0xb57138);
+    arms[1].add(drink);
+    batchStatic(drink);
+    drink.visible = false;
+  }
   if (weapon) batchStatic(weapon);
-  for (const part of [...arms, ...legs, head]) batchStatic(part, new Set(weapon ? [weapon] : []));
+  for (const part of [...arms, ...legs, head])
+    batchStatic(part, new Set([weapon, drink].filter(Boolean)));
   batchStatic(body, new Set([...arms, ...legs, head]));
-  return { root, body, head, arms, legs, torch, cone, ring, phase: 0, torso, weapon };
+  return { root, body, head, arms, legs, torch, cone, ring, phase: 0, torso, weapon, drink };
 }
 export class GameScene {
   constructor(container) {
@@ -1094,12 +1104,26 @@ export class GameScene {
     a.legs[1].rotation.x = -gait;
     a.arms[0].rotation.x = -gait * 0.8;
     a.arms[1].rotation.x = gait * 0.8;
+    a.head.rotation.x = 0;
+    if (a.drink) a.drink.visible = p.state === 'party' && p.socialStyle === 'drink' && speed < 0.25;
     if (guard && p.state === 'party' && speed < 0.25) {
       const beat = t * 1.8 + Number(p.id.slice(1)) * 1.7;
       a.arms[0].rotation.x = -0.4 + Math.sin(beat) * 0.25;
       a.arms[1].rotation.x = -0.7 + Math.sin(beat * 0.7) * 0.3;
       a.head.rotation.y = Math.sin(beat * 0.35) * 0.14;
       a.body.rotation.y = Math.sin(beat * 0.5) * 0.04;
+      if (p.socialStyle === 'listen') {
+        a.arms[0].rotation.x = -0.12;
+        a.arms[1].rotation.x = -0.15;
+        a.head.rotation.x = Math.sin(beat * 0.65) * 0.09;
+      } else if (p.socialStyle === 'drink') {
+        a.arms[1].rotation.x = -1.6 + Math.sin(beat * 0.5) * 0.15;
+        a.head.rotation.x = -0.08;
+      } else if (p.socialStyle === 'dance') {
+        a.body.rotation.z = Math.sin(beat) * 0.055;
+        a.arms[0].rotation.x = -0.8 + Math.sin(beat) * 0.3;
+        a.arms[1].rotation.x = -0.8 - Math.sin(beat) * 0.3;
+      }
     } else {
       a.head.rotation.y = 0;
       a.body.rotation.y = 0;
@@ -1143,7 +1167,13 @@ export class GameScene {
     }
     if (p.climb) a.body.position.y = 0;
     a.body.rotation.x = p.climb ? 0.5 : p.cleaning ? 0.85 : crouch ? 0.32 : captured ? 0.2 : 0;
-    a.body.rotation.z = eliminated ? 1.4 : p.invuln > 1.3 ? Math.sin(t * 40) * 0.1 : 0;
+    a.body.rotation.z = eliminated
+      ? 1.4
+      : p.invuln > 1.3
+        ? Math.sin(t * 40) * 0.1
+        : guard && p.state === 'party' && p.socialStyle === 'dance'
+          ? Math.sin(t * 1.8 + Number(p.id.slice(1)) * 1.7) * 0.055
+          : 0;
     a.hideAmount = THREE.MathUtils.damp(a.hideAmount || 0, p.hidden ? 1 : 0, 13, dt);
     a.root.visible = p.f === this.floor && a.hideAmount < 0.98 && p.alive !== false;
     const me = this.viewer;

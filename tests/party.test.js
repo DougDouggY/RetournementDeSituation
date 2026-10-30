@@ -223,3 +223,21 @@ test('rematching resets tension, routines, cleaning and concealed bodies', () =>
   assert.equal(p.cleanProgress, 0);
   assert.equal(s.bodies.length, 0);
 });
+
+test('quiet guests vary their social gestures and take collision-safe steps inside their original party area', () => {
+  const s = solo();
+  const initial = s.guards.map((g) => ({ x: g.x, z: g.z, style: g.socialStyle }));
+  for (let i = 0; i < 400; i++) {
+    s.tick(0.05);
+    for (const g of s.guards) {
+      assert.equal(g.state, 'party');
+      assert.equal(regionAt(g.f, g.x, g.z), regionAt(g.home.f, g.home.x, g.home.z));
+      assert.ok(distance(g, g.home) < 1.1);
+      assert.equal(blocked(g.f, g.x, g.z, s.doorStates, 0.28), false);
+    }
+  }
+  assert.ok(s.guards.filter((g, i) => distance(g, initial[i]) > 0.15).length >= 2);
+  assert.ok(s.guards.some((g, i) => g.socialStyle !== initial[i].style));
+  assert.ok(s.guards.every((g) => ['talk', 'listen', 'drink', 'dance'].includes(g.socialStyle)));
+  assert.equal(s.phase, 'infiltration');
+});
