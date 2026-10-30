@@ -48,6 +48,8 @@ try {
   assert.equal(await page.evaluate(() => window.__RDS.activePointLights), 10);
   await fs.mkdir('test-results', { recursive: true });
   await page.screenshot({ path: 'test-results/first-person-outside.png' });
+  const officeAmbient = await page.evaluate(() => window.__RDS.roomAmbient['r1-3']);
+  assert.ok(officeAmbient.length > 0 && officeAmbient.every((v) => v > 0));
   const first = await page.evaluate(() => window.__RDS.state.players[0]);
   await page.keyboard.down('KeyW');
   await page.waitForFunction(() => window.__RDS.state.players[0].x > -26.05, null, { polling: 50 });
@@ -55,12 +57,18 @@ try {
   const moved = await page.evaluate(() => window.__RDS.state.players[0]);
   assert.ok(moved.x > first.x + 2);
   assert.ok(Math.abs(moved.z - first.z) < 0.3);
-  await page.keyboard.press('KeyB');
+  await page.keyboard.down('KeyE');
   await page.waitForFunction(() => window.__RDS.state.doors['entry-west'] === 'ajar');
   await page.waitForFunction(
-    () => Math.abs(window.__RDS.doorLeaves['entry-west'].angle - Math.PI / 6) < 0.02,
+    () => Math.abs(window.__RDS.doorLeaves['entry-west'].angle - Math.PI / 5) < 0.02,
   );
   assert.equal(await page.evaluate(() => window.__RDS.doorLeaves['entry-west'].opaque), true);
+  const bodyBeforePeek = await page.evaluate(() => window.__RDS.state.players[0].x);
+  assert.ok(await page.evaluate(() => window.__RDS.eye.x > window.__RDS.state.players[0].x));
+  await page.screenshot({ path: 'test-results/held-e-peek.png' });
+  assert.equal(await page.evaluate(() => window.__RDS.state.players[0].x), bodyBeforePeek);
+  await page.keyboard.up('KeyE');
+  await page.waitForFunction(() => window.__RDS.state.doors['entry-west'] === false);
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() => window.__RDS.state.doors['entry-west'] === true);
   await page.keyboard.press('KeyE');
@@ -71,6 +79,12 @@ try {
   await page.keyboard.down('KeyE');
   await page.waitForFunction(() => window.__RDS.state.doors['window-office']);
   await page.keyboard.up('KeyE');
+  assert.deepEqual(
+    await page.evaluate(() => window.__RDS.roomAmbient['r1-3']),
+    officeAmbient,
+    'room illumination must not depend on window proximity',
+  );
+  await page.screenshot({ path: 'test-results/office-window-permanently-lit.png' });
   await page.keyboard.press('KeyV');
   await page.waitForFunction(
     () => window.__RDS.state.players[0].x > -25 && !window.__RDS.state.players[0].climb,
@@ -96,6 +110,7 @@ try {
   assert.ok(
     await page.evaluate(() => window.__RDS.fixtures.filter((f) => f.room === 'r1-3').length >= 2),
   );
+  assert.ok(await page.evaluate(() => window.__RDS.roomAmbient['r1-3'].every((v) => v === 0)));
   assert.equal(await page.evaluate(() => window.__RDS.moonLight), 0);
   assert.ok(await page.evaluate(() => window.__RDS.ambientLight < 0.02));
   assert.ok(await page.evaluate(() => window.__RDS.renderedLights.every((v) => v === 0)));

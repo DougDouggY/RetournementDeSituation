@@ -81,6 +81,7 @@ export const gardenLamps = [
   ...[-10, 18].map((x) => ({ x, z: -38 })),
 ];
 function door(id, f, x, z, axis = 'x', width = 2, extra = {}) {
+  if (!extra.window && !extra.patio) width = 1;
   doors.push({
     id,
     f,
@@ -385,7 +386,7 @@ export function inside(x, z, b, r = 0) {
   return Math.abs(x - b.x) < b.w / 2 + r && Math.abs(z - b.z) < b.d / 2 + r;
 }
 // The ajar leaf uses the same hinge and angle as the renderer.
-export const AJAR_ANGLE = Math.PI / 6;
+export const AJAR_ANGLE = Math.PI / 5;
 export function doorLeafContains(d, x, z, radius = 0) {
   const width = d.axis === 'z' ? d.d : d.w;
   const angle = (d.axis === 'z' ? Math.PI / 2 : 0) + AJAR_ANGLE;
@@ -450,7 +451,7 @@ export function blocked(f, x, z, doorStates = {}, radius = 0.32, ignoreDoors = f
           ? inside(x, z, d, radius)
           : !ignoreDoors &&
             (doorStates[d.id] === 'ajar'
-              ? doorLeafContains(d, x, z, radius)
+              ? inside(x, z, d, radius) || doorLeafContains(d, x, z, radius)
               : !doorStates[d.id] && inside(x, z, d, radius))),
     )
   );
@@ -588,7 +589,19 @@ export function pathfind(f, start, end, states = {}) {
   return result.reverse();
 }
 
+export function peekView(viewer, states = {}) {
+  const d = doors.find((d) => d.id === viewer.peeking && d.f === viewer.f);
+  if (!d || states[d.id] !== 'ajar' || distance(viewer, d) > 1.9) return viewer;
+  const width = d.axis === 'z' ? d.d : d.w;
+  const side = Math.sign(d.axis === 'z' ? viewer.x - d.x : viewer.z - d.z) || 1;
+  return {
+    ...viewer,
+    x: d.x + (d.axis === 'z' ? side * 0.18 : width * 0.35),
+    z: d.z + (d.axis === 'z' ? -width * 0.35 : side * 0.18),
+  };
+}
 export function visibleRegions(viewer, states = {}) {
+  viewer = peekView(viewer, states);
   const current = regionAt(viewer.f, viewer.x, viewer.z),
     visible = new Set([current]);
   for (const d of doors) {
@@ -608,7 +621,7 @@ export function visibleRegions(viewer, states = {}) {
     const normal = d.axis === 'z' ? { x: 1, z: 0 } : { x: 0, z: 1 };
     const a = regionAt(d.f, d.x + normal.x * 0.7, d.z + normal.z * 0.7),
       b = regionAt(d.f, d.x - normal.x * 0.7, d.z - normal.z * 0.7);
-    const portals = [-0.4, 0, 0.4].map((offset) => ({
+    const portals = [-0.35, 0, 0.35].map((offset) => ({
       x: d.x + (d.axis === 'x' ? d.w * offset : 0),
       z: d.z + (d.axis === 'z' ? d.d * offset : 0),
     }));
@@ -623,6 +636,7 @@ export function visibleRegions(viewer, states = {}) {
   return visible;
 }
 export function canObserve(viewer, point, states = {}, regions = visibleRegions(viewer, states)) {
+  viewer = peekView(viewer, states);
   return (
     viewer.f === point.f &&
     regions.has(regionAt(point.f, point.x, point.z)) &&

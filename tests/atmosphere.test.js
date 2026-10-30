@@ -1,7 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Simulation } from '../shared/simulation.js';
-import { doors, devices, blocked, lineClear, doorLeafContains, AJAR_ANGLE } from '../shared/map.js';
+import {
+  doors,
+  devices,
+  blocked,
+  lineClear,
+  doorLeafContains,
+  AJAR_ANGLE,
+  peekView,
+  canObserve,
+} from '../shared/map.js';
 import { Sound, proximityGain } from '../src/audio.js';
 
 test('nearby voices fade with distance, stop between floors and attenuate behind opaque doors', () => {
@@ -17,35 +26,68 @@ test('nearby voices fade with distance, stop between floors and attenuate behind
   );
 });
 
-test('ajar door is authoritative, respects locks and can open fully or close', () => {
+test('tap E opens normally; holding E peeks only until release and respects locks', () => {
   const s = new Simulation();
   s.addPlayer('p');
   s.start(true);
   const p = s.players[0];
   Object.assign(p, { f: 1, x: -26.1, z: -1 });
-  s.action('p', 'ajar');
-  assert.equal(s.doorStates['entry-west'], 'ajar');
-  s.action('p', 'interact');
+  s.setInput('p', { use: true });
+  s.action('p', 'beginUse');
+  assert.equal(s.doorStates['entry-west'], false, 'the initial press must not reveal the room');
+  s.action('p', 'endUse');
   assert.equal(s.doorStates['entry-west'], true);
   s.action('p', 'interact');
+  s.action('p', 'beginUse');
+  s.time += 0.4;
+  s.updatePeek(p, false);
+  assert.equal(s.doorStates['entry-west'], 'ajar');
+  assert.equal(p.peeking, 'entry-west');
+  s.action('p', 'endUse');
   assert.equal(s.doorStates['entry-west'], false);
-  s.action('p', 'ajar');
-  s.action('p', 'ajar');
-  assert.equal(s.doorStates['entry-west'], false);
+  assert.equal(p.peeking, null);
   s.doorLocks['entry-west'] = { region: 'hall1' };
-  s.action('p', 'ajar');
+  s.action('p', 'beginUse');
+  s.time += 0.4;
+  s.updatePeek(p, false);
   assert.equal(s.doorStates['entry-west'], false);
 });
 
-test('ajar leaf blocks bodies and sight while its narrow aperture permits a sight ray', () => {
-  const door = doors.find((d) => d.id === 'entry-west');
-  const states = { [door.id]: 'ajar' };
-  const x = door.x - Math.sin(AJAR_ANGLE),
-    z = door.z + 1 - Math.cos(AJAR_ANGLE);
-  assert.equal(doorLeafContains(door, x, z), true);
+test('narrow ajar doors permit sight through the slit but block every body crossing', () => {
+  const d = doors.find((d) => d.id === 'entry-west');
+  assert.equal(d.d, 1);
+  const states = { [d.id]: 'ajar' };
+  const x = d.x - Math.sin(AJAR_ANGLE) * 0.5,
+    z = d.z + 0.5 - Math.cos(AJAR_ANGLE) * 0.5;
+  assert.equal(doorLeafContains(d, x, z), true);
   assert.equal(blocked(1, x, z, states), true);
   assert.equal(lineClear(1, { x: -27, z: -1 }, { x: -23, z: -1 }, states), false);
-  assert.equal(lineClear(1, { x: -25.2, z: -1.8 }, { x: -24.8, z: -1.8 }, states), true);
+  assert.equal(lineClear(1, { x: -25.2, z: -1.35 }, { x: -24.8, z: -1.35 }, states), true);
+  for (let z = -1.45; z < -0.5; z += 0.05) assert.equal(blocked(1, -25, z, states, 0.32), true);
+  assert.equal(blocked(1, -25, -1, { [d.id]: true }, 0.32), false);
+});
+
+test('peeking provides an interior view without exposing the body, and cancels on movement', () => {
+  const s = new Simulation();
+  s.addPlayer('p');
+  s.start(true);
+  const p = s.players[0];
+  Object.assign(p, { f: 1, x: -26.1, z: -1 });
+  s.setInput('p', { use: true });
+  s.action('p', 'beginUse');
+  s.time += 0.4;
+  s.updatePeek(p, false);
+  const eye = peekView(p, s.doorStates);
+  assert.ok(eye.x > p.x && eye.x < -25);
+  assert.ok(canObserve(p, { f: 1, x: -24, z: -1.35 }, s.doorStates));
+  const guard = s.guards[0];
+  Object.assign(guard, { f: 1, x: -24, z: -1.35, angle: -Math.PI / 2 });
+  assert.equal(s.canSee(guard, p), false);
+  s.updatePeek(p, true);
+  assert.equal(s.doorStates['entry-west'], false);
+  assert.equal(p.peeking, null);
+  s.doorStates['entry-west'] = true;
+  assert.equal(s.canSee(guard, p), true, 'the player becomes visible through a fully open door');
 });
 
 test('office switch is reachable beside the jamb and does not steal the door interaction', () => {

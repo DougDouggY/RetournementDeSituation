@@ -139,3 +139,13 @@ La suite complète passe : 76 tests. Les parcours Chromium de première personne
 - Contrôle navigateur de la terrasse : 50 ampoules, quatre projecteurs muraux et dix lumières ponctuelles de rendu au total ; aucun changement de budget. Capture `test-results/terrace-v082.png` inspectée.
 
 Les vérifications Chromium utilisent SwiftShader logiciel et ne mesurent pas la fluidité sur le GPU des joueurs. La synthèse vocale française reste dépendante des voix disponibles dans le navigateur ; ses règles de volume sont testées, sans validation subjective de la voix sur chaque système. Le pipeline Cloudflare distant n’est pas vérifié par ces contrôles locaux.
+
+## Version 0.8.3 — éclairage permanent et maintien de E
+
+`npm test` : **83 tests réussis, aucun échec ni test ignoré**. Les nouvelles règles couvrent l’appui bref et le maintien de E, la fermeture au relâchement, les verrous, l’annulation au mouvement, la vision depuis la fente sans exposition du personnage et l’impossibilité de traverser une porte entrouverte. Les parcours d’IA, toutes les pièces et les deux escaliers restent accessibles avec les portes simples réduites à un mètre.
+
+La compilation solo V0.8.3 réussit. Le parcours Chromium en première personne contrôle le maintien de E, le décalage du regard sans déplacement du corps, le retour à une porte fermée au relâchement et l’ouverture normale par appui bref. Il compare aussi l’éclairage ambiant rendu du bureau depuis le jardin puis devant sa fenêtre : il reste identique et positif, puis tombe à zéro uniquement après utilisation de l’interrupteur. Les captures `held-e-peek.png` et `office-window-permanently-lit.png` sont générées dans `test-results/`.
+
+Le rendu conserve dix lumières ponctuelles ; les surfaces intérieures ont un éclairage propre lié au courant et aux interrupteurs, indépendant du choix des lumières autour de la caméra. Les faces éclairées des murs intérieurs restent opaques et les rambardes de l’étage sont conservées.
+
+Les parcours finaux `node tests/first-person-browser.mjs` et `node tests/solo-browser.mjs` passent sans erreur JavaScript/WebGL, avec bascule F2 conservée. Les deux captures ci-dessus ont été inspectées : le couloir est visible depuis la fente et les murs et meubles du bureau restent éclairés depuis l’extérieur. Aucun déploiement Cloudflare distant n’a été vérifié dans cette validation.

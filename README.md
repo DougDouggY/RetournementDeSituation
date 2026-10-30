@@ -193,3 +193,11 @@ Les voix des invités diminuent progressivement avec la distance, sont atténué
 Les portes ordinaires sont opaques. **B** entrouvre la porte proche à 30° ou la referme ; **E** ouvre complètement une porte entrouverte. La fente et le panneau interviennent dans la vision et les collisions de la simulation, pour les deux vues ; une porte verrouillée reste verrouillée. Les fenêtres coulissantes et portes-fenêtres conservent leurs commandes. Les chaises, canapés, étagères, armoires et bureaux concernés sont orientés vers leur espace d’utilisation. L’interrupteur du bureau se trouve maintenant à côté du chambranle, sans prendre la priorité sur la porte.
 
 Le déploiement Cloudflare existant conserve ses commandes et `wrangler.jsonc`.
+
+## Version 0.8.3 — éclairage stable et observation avec E
+
+Les pièces alimentées restent éclairées en permanence, même vues de loin par une fenêtre. Leur éclairage ambiant propre est indépendant de la proximité et de la direction de la caméra ; les interrupteurs et le coffret restent fonctionnels. En première personne, la géométrie intérieure est présente derrière les vitres à toute distance, tandis que les murs et portes opaques continuent de masquer ce qui se trouve derrière eux.
+
+**Appuyer brièvement sur E** ouvre ou ferme une porte simple. **Maintenir E** entrouvre une porte fermée après 0,35 seconde et permet de regarder discrètement depuis la fente, sans déplacer le personnage ni traverser l’ouverture. **Relâcher E** referme immédiatement. Bouger ou ouvrir les paramètres annule l’observation. La touche B n’est plus utilisée. La discrétion vaut face aux invités de l’autre côté du battant, lampe éteinte ; un invité du même côté peut toujours voir le joueur. Une porte verrouillée ne peut pas être entrouverte.
+
+Les portes simples mesurent maintenant un mètre de large et 2,7 mètres de haut. Les ouvertures des murs, encadrements, collisions et chemins utilisent la même nouvelle largeur. Les fenêtres et les grandes portes-fenêtres doubles gardent leurs dimensions et leurs commandes.

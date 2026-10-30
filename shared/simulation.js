@@ -141,6 +141,8 @@ export class Simulation {
         throwCharge: 0,
         path: [],
         botSabotaged: false,
+        pendingDoor: null,
+        peeking: null,
         opening: null,
         openProgress: 0,
         attackCooldown: 0,
@@ -245,7 +247,56 @@ export class Simulation {
     }
   }
 
-  interact(id, ajar = false) {
+  beginUse(p) {
+    if (p.status !== 'free' || p.climb || p.pendingDoor || p.peeking) return;
+    const target = this.nearby(p);
+    if (
+      target?.kind === 'door' &&
+      !target.obj.window &&
+      !target.obj.patio &&
+      !p.hidden &&
+      !p.dragging
+    ) {
+      p.pendingDoor = { id: target.obj.id, at: this.time };
+    } else this.interact(p.id);
+  }
+  endUse(p, cancel = false) {
+    const pending = p.pendingDoor;
+    if (p.peeking && this.doorStates[p.peeking] === 'ajar') this.doorStates[p.peeking] = false;
+    const wasPeeking = !!p.peeking;
+    p.peeking = null;
+    p.pendingDoor = null;
+    if (!cancel && pending && !wasPeeking && this.nearby(p)?.obj.id === pending.id)
+      this.interact(p.id);
+  }
+  updatePeek(p, moving) {
+    const pending = p.pendingDoor;
+    if (!pending) return false;
+    const d = doors.find((d) => d.id === pending.id);
+    if (
+      !p.input.use ||
+      p.hidden ||
+      p.climb ||
+      p.status !== 'free' ||
+      !d ||
+      distance(p, d) > 1.9 ||
+      this.doorLocks[d.id] ||
+      moving
+    ) {
+      this.endUse(p, true);
+      return false;
+    }
+    if (this.time - pending.at >= 0.35 && this.doorStates[d.id] === false) {
+      this.doorStates[d.id] = 'ajar';
+      p.peeking = d.id;
+    }
+    if (p.peeking && this.doorStates[p.peeking] !== 'ajar') {
+      this.endUse(p, true);
+      return false;
+    }
+    return !!p.peeking;
+  }
+  interact(id) {
     const p = this.players.find((p) => p.id === id);
     if (!p || p.status !== 'free' || !['intro', 'playing', 'infiltration'].includes(this.phase))
       return;
@@ -275,14 +326,7 @@ export class Simulation {
         p.openProgress = 0;
         return;
       }
-      this.doorStates[obj.id] =
-        ajar && !obj.window && !obj.patio
-          ? this.doorStates[obj.id] === 'ajar'
-            ? false
-            : 'ajar'
-          : this.doorStates[obj.id] === 'ajar'
-            ? true
-            : !this.doorStates[obj.id];
+      this.doorStates[obj.id] = !this.doorStates[obj.id];
       this.event('door', this.doorStates[obj.id] ? 'Porte ouverte' : 'Porte fermée', {
         f: p.f,
         x: obj.x,
@@ -433,6 +477,15 @@ export class Simulation {
     if (!['intro', 'playing', 'infiltration'].includes(this.phase)) return;
     const p = this.players.find((p) => p.id === id);
     if (!p) return;
+    if (type === 'beginUse') {
+      this.beginUse(p);
+      return;
+    }
+    if (type === 'endUse' || type === 'cancelUse') {
+      this.endUse(p, type === 'cancelUse');
+      return;
+    }
+    if (p.peeking) return;
     if (type === 'cancelThrow') {
       p.charging = false;
       p.throwCharge = 0;
@@ -457,7 +510,6 @@ export class Simulation {
     if (type === 'attack') this.stab(p);
     if (type === 'drag') this.toggleDrag(p);
     if (type === 'interact') this.interact(id);
-    if (type === 'ajar') this.interact(id, true);
     if (type === 'torch' && p.status === 'free' && !p.hidden) {
       p.torch = !p.torch;
       this.event('switch', 'Clic.', { player: p.id });
@@ -539,6 +591,13 @@ export class Simulation {
   }
   canSee(g, p) {
     if (g.alive === false || g.f !== p.f || p.status !== 'free' || p.hidden) return false;
+    if (
+      p.peeking &&
+      !p.torch &&
+      this.doorStates[p.peeking] === 'ajar' &&
+      regionAt(g.f, g.x, g.z) !== regionAt(p.f, p.x, p.z)
+    )
+      return false;
     const d = distance(g, p),
       r = roomAt(p.f, p.x, p.z),
       lit = this.power && (!r || this.lightStates[r.id]);
@@ -1131,6 +1190,7 @@ export class Simulation {
     return true;
   }
   capture(g, p) {
+    this.endUse(p, true);
     p.climb = null;
     p.climbHeight = 0;
     p.cleaning = null;
@@ -1472,6 +1532,11 @@ export class Simulation {
       const inp = p.input,
         length = Math.hypot(inp.x || 0, inp.z || 0),
         moving = length > 0.05;
+      if (this.updatePeek(p, moving)) {
+        p.moving = false;
+        p.running = false;
+        continue;
+      }
       if (this.cleanBlood(p, dt, moving)) continue;
       if (p.opening) {
         const d = doors.find((d) => d.id === p.opening);

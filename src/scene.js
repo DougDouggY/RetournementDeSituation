@@ -15,6 +15,7 @@ import {
   walls,
   doors,
   AJAR_ANGLE,
+  peekView,
   lineClear,
   props,
   hides,
@@ -730,6 +731,49 @@ export class GameScene {
       this.floors[1].add(a.root);
     });
     // Keep a fixed light budget: revealing rooms must never change shader light counts.
+    this.roomAmbientMaterials = new Map();
+    for (const [id, group] of this.roomMeshes) {
+      if (id === 'outside') continue;
+      // Stable interior bounce light on the room-facing side of each opaque wall.
+      // Exterior faces stay dark; no point light needs to turn on at a window.
+      for (const w of walls.filter((w) => !w.railing && (w.a === id || w.b === id))) {
+        const dx = w.axis === 'z' ? 0.13 : 0,
+          dz = w.axis === 'x' ? 0.13 : 0;
+        const sign = regionAt(w.f, w.x + dx, w.z + dz) === id ? 1 : -1;
+        const face = box(
+          group,
+          w.x + dx * sign,
+          1.56,
+          w.z + dz * sign,
+          w.axis === 'z' ? 0.012 : w.w,
+          3.12,
+          w.axis === 'x' ? 0.012 : w.d,
+          palettes[w.f % palettes.length].wall,
+          0,
+        );
+        face.castShadow = false;
+        face.visible = false;
+        this.ceilings.push(face);
+      }
+      const copies = new Map();
+      group.traverse((mesh) => {
+        if (!mesh.isMesh || this.fixtureMeshes.some((f) => f.mesh === mesh)) return;
+        const clone = (original) => {
+          if (!original.emissive || !original.color) return original;
+          if (!copies.has(original)) {
+            const copy = original.clone();
+            copy.emissive.copy(copy.color);
+            copy.emissiveIntensity = 0.45;
+            copies.set(original, copy);
+          }
+          return copies.get(original);
+        };
+        mesh.material = Array.isArray(mesh.material)
+          ? mesh.material.map(clone)
+          : clone(mesh.material);
+      });
+      this.roomAmbientMaterials.set(id, [...copies.values()]);
+    }
     this.localLightSources = [...this.lightMeshes.values(), ...this.gardenLights];
     for (const light of this.localLightSources) {
       light.userData.region =
@@ -921,10 +965,10 @@ export class GameScene {
       const lintel = box(
         doorGroup,
         d.x,
-        d.patio ? 2.825 : 2.575,
+        d.patio ? 2.825 : 2.925,
         d.z,
         d.axis === 'x' ? d.w : 0.24,
-        d.patio ? 0.65 : 1.15,
+        d.patio ? 0.65 : 0.45,
         d.axis === 'z' ? d.d : 0.24,
         0x778c80,
       );
@@ -995,19 +1039,19 @@ export class GameScene {
         );
         box(frame, 1, 0.74, 0.1, 2.16, 0.12, 0.32, 0xc0b69a);
       } else {
-        const leaf = box(pivot, 1, 1, 0, 1.94, 2, 0.13, 0x6a5440);
+        const leaf = box(pivot, 1, 1.35, 0, 1.94, 2.7, 0.13, 0x6a5440);
         leaf.material = leaf.material.clone();
         leaf.material.transparent = false;
         leaf.material.opacity = 1;
-        box(pivot, 1.75, 1, 0.12, 0.12, 0.12, 0.14, 0xc2a166);
+        box(pivot, 1.75, 1.1, 0.12, 0.12, 0.12, 0.14, 0xc2a166);
         for (const side of [-1, 1])
           box(
             doorGroup,
             d.x + (d.axis === 'z' ? 0 : side * (width / 2 + 0.05)),
-            1.1,
+            1.4,
             d.z + (d.axis === 'z' ? side * (width / 2 + 0.05) : 0),
             0.12,
-            2.2,
+            2.8,
             0.25,
             0xa59a7e,
           );
@@ -1258,8 +1302,9 @@ export class GameScene {
       setTimeout(() => this.container.classList.remove('floor-change'), 220);
     }
     this.floors.forEach((g, i) => (g.visible = i === this.floor));
-    for (const [id, group] of this.roomMeshes) group.visible = !me || this.visibleRooms.has(id);
-    this.ground.visible = !me || this.visibleRooms.has('outside');
+    for (const [id, group] of this.roomMeshes)
+      group.visible = fps || !me || this.visibleRooms.has(id);
+    this.ground.visible = fps || !me || this.visibleRooms.has('outside');
     if (observer) this.exterior.visible = f === 1;
     for (const w of this.wallGroups) {
       const regions = [w.a, w.b];
@@ -1279,7 +1324,7 @@ export class GameScene {
         upper.scale.y = fps ? 1.5 : 1;
         upper.position.y = fps ? 1.95 : 1.55;
       }
-      w.group.visible = !me || regions.some((r) => this.visibleRooms.has(r));
+      w.group.visible = fps || !me || regions.some((r) => this.visibleRooms.has(r));
     }
     if (me)
       for (const d of doors) {
@@ -1288,7 +1333,7 @@ export class GameScene {
           regionAt(d.f, d.x + normal.x, d.z + normal.z),
           regionAt(d.f, d.x - normal.x, d.z - normal.z),
         ].some((r) => this.visibleRooms.has(r));
-        this.doorGroups.get(d.id).visible = d.f === this.floor && visible;
+        this.doorGroups.get(d.id).visible = d.f === this.floor && (fps || visible);
       }
     if (observer)
       this.target.set(
@@ -1559,11 +1604,11 @@ export class GameScene {
         const region = light.userData.region;
         return (
           light.userData.floor === this.floor &&
-          (!fps ||
-            lineClear(f, me, { x: light.position.x, z: light.position.z }, state.doors, true)) &&
-          (!me ||
-            !region ||
-            this.visibleRooms.has(region.startsWith('hall') ? `hall${this.floor}` : region))
+          (fps
+            ? (region.startsWith('hall') ? `hall${f}` : region) === regionAt(f, me.x, me.z)
+            : !me ||
+              !region ||
+              this.visibleRooms.has(region.startsWith('hall') ? `hall${this.floor}` : region))
         );
       })
       .sort(
@@ -1581,6 +1626,10 @@ export class GameScene {
         light.decay = source.decay;
       }
     }
+    for (const [id, materials] of this.roomAmbientMaterials) {
+      const on = power && (!state || state.lights[id] !== false);
+      for (const material of materials) material.emissiveIntensity = on ? 0.45 : 0;
+    }
     for (const fixture of this.fixtureMeshes)
       fixture.mesh.material.emissiveIntensity =
         power && (!state || state.lights[fixture.room] !== false) ? 1 : 0;
@@ -1588,7 +1637,8 @@ export class GameScene {
     for (const ceiling of this.ceilings) ceiling.visible = fps;
     if (fps) {
       const height = me.crouching || me.hidden ? 0.95 : 1.65;
-      this.fpsCamera.position.set(me.x, height + (me.climbHeight || 0), me.z);
+      const eye = peekView(me, state.doors);
+      this.fpsCamera.position.set(eye.x, height + (me.climbHeight || 0), eye.z);
       const direction = new THREE.Vector3(
         Math.sin(this.lookYaw) * Math.cos(this.lookPitch),
         Math.sin(this.lookPitch),
