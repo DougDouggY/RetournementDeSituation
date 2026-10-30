@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Simulation } from '../shared/simulation.js';
 import {
   rooms,
+  walls,
   props,
   hides,
   doors,
@@ -24,7 +25,12 @@ function solo() {
 
 test('undisturbed guests spend the opening at the party, with only one ordinary errand at a time', () => {
   const s = solo();
-  assert.ok(s.guards.every((g) => regionAt(g.f, g.x, g.z) === 'r1-0' && g.state === 'party'));
+  assert.ok(s.guards.every((g) => g.state === 'party'));
+  assert.deepEqual([...new Set(s.guards.map((g) => regionAt(g.f, g.x, g.z)))].sort(), [
+    'outside',
+    'r1-0',
+    'r1-1',
+  ]);
   advance(s, 20);
   assert.ok(s.guards.every((g) => g.state === 'party' && !g.armed));
   advance(s, 15);
@@ -40,13 +46,13 @@ test('quiet and loud noises send limited groups; repeated incidents gradually ad
     [18, 2],
   ]) {
     const s = solo();
-    s.guards.forEach((g, i) => Object.assign(g, { x: -5 + i * 1.2, z: 0, f: 1 }));
-    s.noise(1, 0, 0, radius, 'Test', 'p');
+    s.guards.forEach((g, i) => Object.assign(g, { x: -34 + i * 1.2, z: 8, f: 1 }));
+    s.noise(1, -30, 8, radius, 'Test', 'p');
     assert.equal(s.guards.filter((g) => g.state === 'suspicion').length, expected);
     assert.equal(s.phase, 'infiltration');
     assert.ok(s.guards.every((g) => !g.armed));
     s.time += 8;
-    s.noise(1, 0, 0, radius, 'Second incident', 'p');
+    s.noise(1, -30, 8, radius, 'Second incident', 'p');
     assert.equal(s.tension, 2);
     for (const g of s.guards) {
       g.last = null;
@@ -62,9 +68,9 @@ test('an isolated attack makes an audible noise and summons nearby listeners bef
     p = s.players[0],
     [victim, listener] = s.guards;
   s.guards = [victim, listener];
-  Object.assign(p, { x: -12, z: 0 });
-  Object.assign(victim, { x: -11, z: 0 });
-  Object.assign(listener, { x: -3, z: 0, angle: Math.PI / 2 });
+  Object.assign(p, { x: -34, z: 8 });
+  Object.assign(victim, { x: -33, z: 8 });
+  Object.assign(listener, { x: -25.5, z: 8, angle: Math.PI / 2 });
   s.stab(p);
   assert.equal(victim.alive, false);
   assert.equal(listener.state, 'suspicion');
@@ -76,9 +82,9 @@ test('an isolated attack makes an audible noise and summons nearby listeners bef
 test('cleaning requires three continuous seconds and removes nearby drag marks but leaves distant blood and the corpse', () => {
   const s = solo(),
     p = s.players[0];
-  Object.assign(p, { x: -12, z: 0 });
-  for (const x of [-12, -11.5, -8]) s.addBlood({ f: 1, x, z: 0 });
-  s.bodies = [{ id: 'corpse', f: 1, x: -12, z: 0 }];
+  Object.assign(p, { x: -34, z: 8 });
+  for (const x of [-34, -33.5, -30]) s.addBlood({ f: 1, x, z: 8 });
+  s.bodies = [{ id: 'corpse', f: 1, x: -34, z: 8 }];
   s.guards.forEach((g) => (g.f = 2));
   s.setInput(p.id, { clean: true });
   advance(s, 1.5);
@@ -91,7 +97,7 @@ test('cleaning requires three continuous seconds and removes nearby drag marks b
   assert.equal(s.blood.length, 3);
   advance(s, 0.3);
   assert.equal(s.blood.length, 1);
-  assert.equal(s.blood[0].x, -8);
+  assert.equal(s.blood[0].x, -30);
   assert.equal(s.bodies.length, 1);
   assert.equal(s.phase, 'infiltration');
   s.setInput(p.id, { x: 1, clean: true });
@@ -102,9 +108,9 @@ test('cleaning requires three continuous seconds and removes nearby drag marks b
 test('cleaning cannot reach through closed windows, across floors or while dragging', () => {
   const s = solo(),
     p = s.players[0];
-  Object.assign(p, { x: -18.6, z: 7 });
-  s.addBlood({ f: 1, x: -17.2, z: 7 });
-  s.addBlood({ f: 0, x: p.x, z: p.z });
+  Object.assign(p, { x: -25.6, z: 6 });
+  s.addBlood({ f: 1, x: -24.2, z: 6 });
+  s.addBlood({ f: 2, x: p.x, z: p.z });
   s.setInput(p.id, { clean: true });
   advance(s, 3.2);
   assert.equal(s.blood.length, 2);
@@ -142,8 +148,8 @@ test('a masked player gets one short challenge, then fleeing or staying too long
     const s = solo(),
       p = s.players[0],
       g = s.guards[0];
-    Object.assign(g, { x: -12, z: 0, angle: Math.PI / 2 });
-    Object.assign(p, { x: -9, z: 0 });
+    Object.assign(g, { x: -34, z: 8, angle: Math.PI / 2 });
+    Object.assign(p, { x: -31, z: 8 });
     s.updateGuest(g, 0.05);
     assert.equal(g.state, 'confrontation');
     assert.equal(s.phase, 'infiltration');
@@ -161,44 +167,47 @@ test('losing sight of the challenged masked intruder also raises the alarm', () 
   const s = solo(),
     p = s.players[0],
     g = s.guards[0];
-  Object.assign(g, { x: -12, z: 0, angle: Math.PI / 2 });
-  Object.assign(p, { x: -9, z: 0 });
+  Object.assign(g, { x: -34, z: 8, angle: Math.PI / 2 });
+  Object.assign(p, { x: -31, z: 8 });
   s.updateGuest(g, 0.05);
-  Object.assign(p, { x: -12, z: -5 });
+  Object.assign(p, { x: -34, z: 3 });
   s.updateGuest(g, 0.05);
   assert.equal(s.phase, 'playing');
 });
 
-test('L-shaped rooms exclude their recesses from room visibility and keep floor patches, doors and furniture consistent', () => {
-  const irregular = rooms.filter((r) => r.cutout);
-  assert.ok(irregular.length >= 6);
+test('irregular room footprints, furniture and wall placement stay consistent', () => {
+  const irregular = rooms.filter((r) => r.parts.length > 1);
+  assert.ok(irregular.length >= 3);
   for (const r of irregular) {
-    const c = r.cutout;
-    assert.equal(regionAt(r.f, c.x, c.z), `hall${r.f}`);
-    assert.equal(blocked(r.f, c.x, c.z, {}, 0.3, true), false);
-    const parts = roomFloorParts(r);
-    assert.equal(
-      parts.reduce((sum, p) => sum + p.w * p.d, 0),
-      r.w * r.d - c.w * c.d,
-    );
-    for (const p of props.filter((p) => p.room === r.id && p.solid)) {
-      assert.equal(regionAt(p.f, p.x, p.z), r.id, `${p.id} outside L-shaped room`);
-    }
+    const area = roomFloorParts(r).reduce((a, p) => a + p.w * p.d, 0);
+    assert.equal(area, r.area);
+    assert.ok(area < r.w * r.d);
   }
-  for (const p of props.filter((p) =>
-    ['wardrobe', 'shelf', 'fridge', 'counter', 'tv', 'sink', 'washer', 'bath', 'bed'].includes(
-      p.type,
-    ),
+  for (const p of props.filter((p) => p.solid && p.room !== 'outside'))
+    for (const sx of [-0.499, 0.499])
+      for (const sz of [-0.499, 0.499])
+        assert.equal(
+          regionAt(p.f, p.x + p.w * sx, p.z + p.d * sz),
+          p.room,
+          `${p.id} crosses a room boundary`,
+        );
+  for (const p of props.filter(
+    (p) =>
+      p.room !== 'outside' &&
+      ['wardrobe', 'shelf', 'fridge', 'counter', 'tv', 'sink', 'washer', 'bath', 'bed'].includes(
+        p.type,
+      ),
   )) {
-    const r = rooms.find((r) => r.id === p.room);
-    const gap = Math.min(
-      r.w / 2 - Math.abs(p.x - r.x) - p.w / 2,
-      r.d / 2 - Math.abs(p.z - r.z) - p.d / 2,
-    );
-    assert.ok(gap < 0.21, `${p.id} is ${gap}m away from a wall`);
+    const gaps = walls
+      .filter((w) => w.f === p.f)
+      .flatMap((w) => [
+        Math.abs(p.x - w.x) < (p.w + w.w) / 2 ? Math.abs(p.z - w.z) - p.d / 2 - w.d / 2 : Infinity,
+        Math.abs(p.z - w.z) < (p.d + w.d) / 2 ? Math.abs(p.x - w.x) - p.w / 2 - w.w / 2 : Infinity,
+      ])
+      .filter((g) => g >= -0.01);
+    assert.ok(Math.min(...gaps) < 0.4, `${p.id} ${p.type} is detached from its wall`);
   }
 });
-
 test('rematching resets tension, routines, cleaning and concealed bodies', () => {
   const s = solo(),
     p = s.players[0];

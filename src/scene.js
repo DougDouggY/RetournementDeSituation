@@ -3,6 +3,15 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {
   rooms,
+  FLOOR_IDS,
+  WORLD,
+  HOUSE,
+  POOL,
+  TERRACE,
+  ATRIUM,
+  SPAWN,
+  houseFloorParts,
+  hallFloorParts,
   walls,
   doors,
   props,
@@ -296,6 +305,16 @@ function furniture(p) {
       cylinder(group, 0, 1.4, 0, 0.26, 0.45, 0.45, 0xccad73);
       cylinder(group, 0, 0.05, 0, 0.25, 0.25, 0.1, 0x493e31);
       break;
+    case 'lounger':
+      b(0, 0.35, 0, w, 0.2, d, 0xb2a181);
+      b(0, 0.55, 0, w - 0.2, 0.18, d - 0.2, 0xe0d5b7);
+      b(0, 0.9, -d * 0.32, w - 0.2, 0.7, 0.3, 0xe0d5b7);
+      break;
+    case 'toilet':
+      b(0, 0.3, 0.15, w * 0.65, 0.6, d * 0.6, 0xd9ded1);
+      cylinder(group, 0, 0.65, 0.15, w * 0.42, w * 0.4, 0.15, 0xd9ded1);
+      b(0, 0.85, -d * 0.3, w, 1.1, d * 0.25, 0xd9ded1);
+      break;
     case 'bath':
       b(0, 0.4, 0, w, 0.8, d, 0xb7c7bd);
       b(0, 0.82, 0, w - 0.25, 0.06, d - 0.25, 0x647f7a);
@@ -534,17 +553,36 @@ export class GameScene {
     this.elapsed = 0;
     this.raycaster = new THREE.Raycaster();
     this.groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-    const ground = box(this.scene, 0, -0.45, 0, 95, 0.4, 80, 0x233b39);
+    const ground = box(this.scene, 0, -0.45, 0, 110, 0.4, 110, 0x233b39);
     ground.receiveShadow = true;
     this.ground = ground;
-    for (let f = 0; f < 3; f++) this.buildFloor(f);
+    for (const f of FLOOR_IDS) this.buildFloor(f);
     // Outside the cutaway: hedges, paving stones, fence and moonlit pines.
     const exterior = this.exterior;
-    for (let x = -26; x < -18; x += 1.2) box(exterior, x, 0.02, 0, 1, 0.08, 2.4, 0x555d5c);
-    box(exterior, -19, 0.12, 0, 2, 0.25, 3.2, 0x5c6060);
+    for (let x = -37; x < -25; x += 1.2) box(exterior, x, 0.02, -1, 1, 0.08, 2.4, 0x555d5c);
+    box(exterior, 0, 0.08, 18, 8, 0.16, 4, 0x5c6060);
+    box(exterior, TERRACE.x, 0.02, TERRACE.z, TERRACE.w, 0.14, TERRACE.d, 0x9d8f74);
+    for (let x = -23; x < 22; x += 1.2) box(exterior, x, 0.1, -22, 0.025, 0.01, 11.8, 0x756b59, 0);
+    box(exterior, POOL.x, -0.12, POOL.z, POOL.w + 1.2, 0.25, POOL.d + 1.2, 0xb6c1b0);
+    const water = box(exterior, POOL.x, 0.025, POOL.z, POOL.w, 0.035, POOL.d, 0x32869b, 0);
+    water.material = new THREE.MeshStandardMaterial({
+      color: 0x3c9fb4,
+      roughness: 0.22,
+      metalness: 0.18,
+      emissive: 0x0d3040,
+      emissiveIntensity: 0.15,
+    });
+    for (let x = POOL.x - POOL.w / 2 + 1; x < POOL.x + POOL.w / 2; x += 2)
+      box(exterior, x, 0.05, POOL.z, 0.025, 0.01, POOL.d - 0.4, 0x77b9bd, 0);
+    const poolName = label('PISCINE');
+    poolName.position.set(POOL.x, 0.08, POOL.z);
+    exterior.add(poolName);
+    const terraceName = label('TERRASSE · SOIRÉE');
+    terraceName.position.set(-3, 0.14, -25.5);
+    exterior.add(terraceName);
     for (let i = 0; i < 25; i++) {
-      const x = -30 + ((i * 17) % 61),
-        z = i % 2 ? 18 : -18;
+      const x = -36 + ((i * 17) % 73),
+        z = i % 2 ? 26 : -42;
       const tree = new THREE.Group();
       tree.position.set(x, 0, z);
       cylinder(tree, 0, 1.3, 0, 0.15, 0.22, 2.6, 0x4c4b3c);
@@ -555,12 +593,12 @@ export class GameScene {
       }
       exterior.add(tree);
     }
-    for (let i = -20; i <= 20; i += 2.5) {
-      box(exterior, i, 0.5, 15, 0.12, 1.1, 0.12, 0x52615a);
-      box(exterior, i, 0.5, -15, 0.12, 1.1, 0.12, 0x52615a);
+    for (let i = -37; i <= 37; i += 2.5) {
+      box(exterior, i, 0.5, 27.8, 0.12, 1.1, 0.12, 0x52615a);
+      box(exterior, i, 0.5, -42.8, 0.12, 1.1, 0.12, 0x52615a);
     }
-    for (const z of [-15, 15])
-      for (const y of [0.3, 0.8]) box(exterior, 0, y, z, 42, 0.08, 0.08, 0x687468);
+    for (const z of [-42.8, 27.8])
+      for (const y of [0.3, 0.8]) box(exterior, 0, y, z, 75, 0.08, 0.08, 0x687468);
     for (const p of gardenLamps) {
       cylinder(exterior, p.x, 0.32, p.z, 0.055, 0.075, 0.64, 0x34413f);
       const glass = cylinder(exterior, p.x, 0.68, p.z, 0.12, 0.12, 0.2, 0xf9e0a8);
@@ -574,13 +612,13 @@ export class GameScene {
       this.gardenFixtures.push({ glass, pool });
     }
     for (const [x, z] of [
-      [-25, 0],
-      [-21, 0],
-      [-21, -8],
-      [-21, 8],
-      [0, -14],
-      [0, 14],
-      [21, 0],
+      [-34, -1],
+      [-28, -1],
+      [-29, 10],
+      [0, -22],
+      [21, -22],
+      [29, 9],
+      [5, -39],
     ]) {
       const light = new THREE.PointLight(0xffd095, 18, 16, 2);
       light.userData.poweredIntensity = 18;
@@ -590,10 +628,15 @@ export class GameScene {
     }
     const porchLight = new THREE.PointLight(0xefbe7c, 14, 10, 2);
     porchLight.userData.poweredIntensity = 14;
-    porchLight.position.set(-19, 2.2, 0);
+    porchLight.position.set(0, 2.2, 17);
     exterior.add(porchLight);
     this.gardenLights.push(porchLight);
-    box(exterior, -18.25, 2, 0.9, 0.22, 0.3, 0.25, 0xc4aa6b);
+    box(exterior, -25.25, 2, -0.1, 0.22, 0.3, 0.25, 0xc4aa6b);
+    const poolLight = new THREE.PointLight(0x69d4e8, 24, 16, 2);
+    poolLight.userData.poweredIntensity = 24;
+    poolLight.position.set(POOL.x, 1.5, POOL.z);
+    exterior.add(poolLight);
+    this.gardenLights.push(poolLight);
     for (const d of doors.filter((d) => d.window)) {
       const n = windowNormal(d),
         pool = lightPool(
@@ -635,16 +678,41 @@ export class GameScene {
   }
   buildFloor(f) {
     const group = new THREE.Group();
-    this.floors.push(group);
+    this.floors[f] = group;
     this.scene.add(group);
     group.visible = f === 1;
-    const base = box(group, 0, -0.18, 0, 36.5, 0.35, 24.5, 0x010205);
-    base.material = new THREE.MeshBasicMaterial({ color: 0x010205 });
+    for (const part of houseFloorParts(f)) {
+      const base = box(group, part.x, -0.18, part.z, part.w, 0.35, part.d, 0x010205);
+      base.material = new THREE.MeshBasicMaterial({ color: 0x010205 });
+    }
     const hall = new THREE.Group();
     group.add(hall);
     this.roomMeshes.set(`hall${f}`, hall);
-    box(hall, 0, 0.005, 0, 35.7, 0.04, 3.8, 0x85765c);
-    for (let i = -17; i < 18; i += 1.5) box(hall, i, 0.035, 0, 0.02, 0.005, 3.8, 0x574e40, 0);
+    for (const part of hallFloorParts(f)) {
+      box(hall, part.x, 0.005, part.z, part.w, 0.04, part.d, 0x85765c);
+      for (let x = part.x - part.w / 2 + 0.5; x < part.x + part.w / 2; x += 1.5)
+        box(hall, x, 0.035, part.z, 0.02, 0.005, part.d, 0x574e40, 0);
+    }
+    for (const [index, x, z] of f === 1
+      ? [
+          [0, 3, 8],
+          [1, 14, -2],
+        ]
+      : [
+          [0, 2, 0],
+          [1, 3, -10],
+        ]) {
+      const lamp = new THREE.PointLight(0xffdab2, 38, 30, 2);
+      lamp.position.set(x, 3, z);
+      hall.add(lamp);
+      this.lightMeshes.set(`hall${f}-${index}`, lamp);
+      cylinder(hall, x, 2.8, z, 0.35, 0.45, 0.12, 0xeadab7);
+    }
+    if (f === 2) {
+      const text = label('VIDE SUR LE HALL');
+      text.position.set(ATRIUM.x, -0.12, ATRIUM.z);
+      hall.add(text);
+    }
     for (const r of rooms.filter((r) => r.f === f)) {
       const roomGroup = new THREE.Group();
       group.add(roomGroup);
@@ -662,33 +730,42 @@ export class GameScene {
           for (let z = part.z - part.d / 2 + 0.5; z < part.z + part.d / 2; z++)
             box(roomGroup, part.x, 0.045, z, part.w - 0.1, 0.008, 0.018, 0x455952, 0);
       }
-      if (r.cutout)
-        box(
-          hall,
-          r.cutout.x,
-          0.005,
-          r.cutout.z,
-          r.cutout.w - 0.1,
-          0.04,
-          r.cutout.d - 0.1,
-          0x85765c,
-        );
       const text = label(r.name.toUpperCase());
-      text.position.set(r.x, 0.07, r.z + (r.z < 0 ? 3.5 : -3.5));
+      text.position.set(r.nav.x, 0.07, r.nav.z);
       roomGroup.add(text);
-      // Framed prints hung on the far walls.
-      box(roomGroup, r.x + 2, 1.5, r.z < 0 ? -11.82 : 11.82, 1.2, 0.85, 0.06, 0x413b30);
-      box(roomGroup, r.x + 2, 1.5, r.z < 0 ? -11.77 : 11.77, 1.02, 0.65, 0.04, 0x9a8f70);
-      const glow = new THREE.PointLight(0xffdab2, 38, Math.max(r.w, r.d) + 6, 2);
-      glow.position.set(r.x, 3, r.z);
-      cylinder(roomGroup, r.x, 2.8, r.z, 0.32, 0.4, 0.12, 0xeadab7);
-      roomGroup.add(glow);
-      this.lightMeshes.set(r.id, glow);
+      let index = 0;
+      for (const part of r.parts)
+        for (const offset of part.w > 16 ? [-0.22, 0.22] : [0]) {
+          const glow = new THREE.PointLight(0xffdab2, 38, Math.max(part.w, part.d) + 8, 2);
+          glow.userData.roomId = r.id;
+          const x = part.x + part.w * offset;
+          glow.position.set(x, 3, part.z);
+          cylinder(roomGroup, x, 2.8, part.z, 0.32, 0.4, 0.12, 0xeadab7);
+          roomGroup.add(glow);
+          this.lightMeshes.set(index++ ? `${r.id}:${index}` : r.id, glow);
+        }
     }
     for (const w of walls.filter((w) => w.f === f)) {
       const wallGroup = new THREE.Group();
       group.add(wallGroup);
       this.wallGroups.push({ ...w, group: wallGroup });
+      if (w.railing) {
+        box(wallGroup, w.x, 0.85, w.z, w.w, 0.08, w.d, 0x9eaa9e, 0.01);
+        const n = Math.ceil(Math.max(w.w, w.d));
+        for (let i = 0; i <= n; i++)
+          box(
+            wallGroup,
+            w.x + (w.w > w.d ? (i / n - 0.5) * w.w : 0),
+            0.42,
+            w.z + (w.d > w.w ? (i / n - 0.5) * w.d : 0),
+            0.06,
+            0.8,
+            0.06,
+            0x647c79,
+            0,
+          );
+        continue;
+      }
       box(wallGroup, w.x, 0.38, w.z, w.w, 0.75, w.d, 0x7d8c7b, 0.02);
       const upper = box(wallGroup, w.x, 1.55, w.z, w.w, 1.6, w.d, 0x778c80, 0.02);
       upper.material = upper.material.clone();
@@ -705,11 +782,35 @@ export class GameScene {
       group.add(doorGroup);
       this.doorGroups.set(d.id, doorGroup);
       const pivot = new THREE.Group();
-      pivot.position.set(d.axis === 'z' ? d.x : d.x - 1, 0, d.axis === 'z' ? d.z + 1 : d.z);
+      const width = d.axis === 'z' ? d.d : d.w;
+      pivot.position.set(
+        d.axis === 'z' ? d.x : d.x - width / 2,
+        0,
+        d.axis === 'z' ? d.z + width / 2 : d.z,
+      );
+      if (!d.patio) pivot.scale.x = width / 2;
       pivot.rotation.y = d.axis === 'z' ? Math.PI / 2 : 0;
       pivot.userData.baseAngle = pivot.rotation.y;
       doorGroup.add(pivot);
-      if (d.window) {
+      if (d.patio) {
+        const other = new THREE.Group();
+        other.position.set(d.x + width / 2, 0, d.z);
+        other.rotation.y = Math.PI;
+        doorGroup.add(other);
+        pivot.userData.doublePivot = other;
+        for (const leaf of [pivot, other]) {
+          const glass = box(leaf, 1, 1.25, 0, 1.9, 2.4, 0.06, 0x8ba9aa);
+          glass.material = new THREE.MeshStandardMaterial({
+            color: 0x749b9b,
+            roughness: 0.2,
+            transparent: true,
+            opacity: 0.45,
+            depthWrite: false,
+          });
+          for (const x of [0.03, 1.97]) box(leaf, x, 1.25, 0.02, 0.08, 2.5, 0.12, 0xc4bba0);
+          for (const y of [0.05, 1.25, 2.5]) box(leaf, 1, y, 0.02, 2, 0.08, 0.12, 0xc4bba0);
+        }
+      } else if (d.window) {
         pivot.userData.sliding = true;
         const frame = new THREE.Group();
         frame.position.copy(pivot.position);
@@ -753,9 +854,9 @@ export class GameScene {
         for (const side of [-1, 1])
           box(
             doorGroup,
-            d.x + (d.axis === 'z' ? 0 : side * 1.05),
+            d.x + (d.axis === 'z' ? 0 : side * (width / 2 + 0.05)),
             1.1,
-            d.z + (d.axis === 'z' ? side * 1.05 : 0),
+            d.z + (d.axis === 'z' ? side * (width / 2 + 0.05) : 0),
             0.12,
             2.2,
             0.25,
@@ -764,13 +865,25 @@ export class GameScene {
       }
       this.doorMeshes.set(d.id, pivot);
     }
-    for (const p of props.filter((p) => p.f === f))
+    for (const p of props.filter((p) => p.f === f && p.type !== 'pool'))
       (this.roomMeshes.get(p.room) || group).add(furniture(p));
     for (const s of stairs.filter((s) => s.f === f && s.to !== null)) {
-      for (let j = 0; j < 7; j++)
-        box(hall, s.x - 1 + j * 0.3, 0.07 + j * 0.07, s.z, 0.3, 0.12 + j * 0.14, 2.5, 0x7a8276);
-      const t = label(s.to > f ? '↑ ÉTAGE' : '↓ SOUS-SOL', '#d7c093');
-      t.position.set(s.x, 0.8, 0);
+      for (let j = 0; j < 7; j++) {
+        const dir = Math.sign(s.landing.z - s.z),
+          length = Math.abs(s.landing.z - s.z);
+        box(
+          hall,
+          s.x,
+          0.07 + j * 0.1,
+          s.z + (dir * j * length) / 7,
+          2.3,
+          0.12 + j * 0.17,
+          length / 7,
+          0x7a8276,
+        );
+      }
+      const t = label(s.to > f ? '↑ ÉTAGE' : '↓ REZ-DE-CHAUSSÉE', '#d7c093');
+      t.position.set(s.x, 0.8, s.z);
       hall.add(t);
     }
     for (const d of devices.filter((d) => d.f === f)) {
@@ -790,11 +903,6 @@ export class GameScene {
         sphere(deviceGroup, d.x, 0.24, d.z + 0.16, 0.14, 0xe2d2aa, 1, 1, 0.2);
       }
       if (d.type === 'breaker') box(deviceGroup, d.x, 1, d.z, 0.65, 1.4, 0.25, 0x5c7269);
-    }
-    // Bound chair in the garage, reachable from the doorway.
-    if (f === 1) {
-      box(this.roomMeshes.get('r1-5'), 14, 0.5, 9, 0.8, 0.16, 0.8, 0x81654b);
-      box(this.roomMeshes.get('r1-5'), 14, 1, 8.7, 0.8, 1, 0.12, 0x81654b);
     }
     for (const r of rooms.filter((r) => r.f === f)) batchStatic(this.roomMeshes.get(r.id));
     batchStatic(hall);
@@ -923,6 +1031,7 @@ export class GameScene {
     this.observerLight.intensity = observer ? 1.8 : 0;
     this.scene.fog.density = observer ? 0 : 0.012;
     this.viewer = observer ? null : me;
+    if (observer && this.observerView === 'follow') this.observerFloor = me.f;
     const f = observer ? this.observerFloor : (me?.f ?? 1);
     this.visibleRooms = observer
       ? new Set([
@@ -943,17 +1052,13 @@ export class GameScene {
     this.ground.visible = !me || this.visibleRooms.has('outside');
     if (observer) this.exterior.visible = f === 1;
     for (const w of this.wallGroups) {
-      const side = w.w > w.d ? { x: 0, z: 0.4 } : { x: 0.4, z: 0 };
-      const regions = [
-        regionAt(w.f, w.x + side.x, w.z + side.z),
-        regionAt(w.f, w.x - side.x, w.z - side.z),
-      ];
+      const regions = [w.a, w.b];
       if (w.group.userData.upper)
         w.group.userData.upper.material.opacity =
           me &&
           this.visibleRooms.has('outside') &&
           !regions.some((r) => r !== 'outside' && this.visibleRooms.has(r)) &&
-          (Math.abs(w.x) > 17.8 || Math.abs(w.z) > 11.8)
+          regions.includes('outside')
             ? 1
             : 0.18;
       w.group.visible = !me || regions.some((r) => this.visibleRooms.has(r));
@@ -967,13 +1072,26 @@ export class GameScene {
         ].some((r) => this.visibleRooms.has(r));
         this.doorGroups.get(d.id).visible = d.f === this.floor && visible;
       }
-    if (observer) this.target.set(0, 0, 0);
+    if (observer)
+      this.target.set(
+        this.observerView === 'follow' ? me.x : 0,
+        0,
+        this.observerView === 'follow' ? me.z : f === 1 && this.observerView !== 'house' ? -7.5 : 0,
+      );
     else if (me) this.target.lerp(new THREE.Vector3(me.x, 0, me.z), 1 - Math.exp(-dt * 5));
     else this.target.set(-9, 0, -5);
     this.camera.position
       .copy(this.target)
       .add(observer ? new THREE.Vector3(0, 45, 0.01) : new THREE.Vector3(0, 27, 17));
-    const zoom = observer ? 0.48 : 1;
+    const zoom = observer
+      ? this.observerView === 'follow'
+        ? 0.8
+        : f === 2
+          ? 0.48
+          : this.observerView === 'house'
+            ? 0.42
+            : 0.27
+      : 1;
     if (this.camera.zoom !== zoom) {
       this.camera.zoom = zoom;
       this.camera.updateProjectionMatrix();
@@ -1020,10 +1138,16 @@ export class GameScene {
         } else {
           const angle = (pivot.userData.baseAngle || 0) + (state.doors[id] ? Math.PI * 0.48 : 0);
           pivot.rotation.y += (angle - pivot.rotation.y) * Math.min(1, dt * 9);
+          if (pivot.userData.doublePivot) {
+            const other = pivot.userData.doublePivot;
+            const target = Math.PI - (state.doors[id] ? Math.PI * 0.48 : 0);
+            other.rotation.y += (target - other.rotation.y) * Math.min(1, dt * 9);
+          }
         }
       }
       for (const [id, light] of this.lightMeshes)
-        light.intensity = state.power !== false && state.lights[id] ? 38 : 0;
+        light.intensity =
+          state.power !== false && state.lights[light.userData.roomId || id] !== false ? 38 : 0;
       for (const noise of state.noises.filter(
         (n) => n.f === this.floor && (!me || canObserve(me, n, state.doors, this.visibleRooms)),
       )) {

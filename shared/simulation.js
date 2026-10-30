@@ -1,5 +1,9 @@
 import {
   NIGHT,
+  FLOORS,
+  SPAWN,
+  CAPTURE_POINT,
+  PARTY_SPOTS,
   rooms,
   doors,
   hides,
@@ -124,8 +128,8 @@ export class Simulation {
     this.lightStates = Object.fromEntries(rooms.map((r) => [r.id, true]));
     this.players.forEach((p, i) =>
       Object.assign(p, {
-        x: this.scenario === 'hunt' ? -12 + i * 2 : -22,
-        z: this.scenario === 'hunt' ? -3.8 : i * 2,
+        x: this.scenario === 'hunt' ? 5 + i : SPAWN.x,
+        z: this.scenario === 'hunt' ? -2 : SPAWN.z + i * 1.5,
         dragging: null,
         climb: null,
         climbHeight: 0,
@@ -151,27 +155,8 @@ export class Simulation {
         bleed: 0,
       }),
     );
-    const lounge = rooms.find((r) => r.id === 'r1-0');
-    const partySpawns = [];
-    for (let z = lounge.z - 3; z <= lounge.z + 3; z += 1.6)
-      for (let x = lounge.x - lounge.w / 2 + 1.5; x < lounge.x + lounge.w / 2 - 1; x += 1.8)
-        if (!blocked(1, x, z, this.doorStates, 0.4)) partySpawns.push([x, z]);
-    const spawns = [
-      [-13, -8],
-      [-8, -8],
-      [0, -9],
-      [4, -8],
-      [10, -8],
-      [14, -8],
-      [-10, 9],
-      [10, 9],
-    ];
-    for (let i = 0; i < 8; i++) {
-      let [x, z] = this.scenario === 'hunt' ? spawns[i] : partySpawns[(i * 3) % partySpawns.length];
-      if (blocked(1, x, z, this.doorStates)) {
-        x = -14 + i * 4;
-        z = 0;
-      }
+    for (let i = 0; i < PARTY_SPOTS.length; i++) {
+      const { x, z, f } = PARTY_SPOTS[i];
       this.guards.push({
         id: `g${i}`,
         name: names[i],
@@ -181,7 +166,7 @@ export class Simulation {
         f: 1,
         angle: 0,
         state: this.scenario === 'hunt' ? 'patrol' : 'party',
-        home: { f: 1, x, z },
+        home: { f, x, z },
         alive: true,
         armed: this.scenario === 'hunt',
         path: [],
@@ -320,10 +305,10 @@ export class Simulation {
     }
     if (kind === 'stairs') {
       p.f = obj.to;
-      p.x = obj.to > obj.f ? -15 : 15;
-      p.z = 0;
+      p.x = obj.landing.x;
+      p.z = obj.landing.z;
       p.hidden = null;
-      this.event('stairs', `Direction ${['le sous-sol', 'le rez-de-chaussée', 'l’étage'][p.f]}.`, {
+      this.event('stairs', `Direction ${FLOORS[p.f]}.`, {
         player: p.id,
       });
     }
@@ -782,8 +767,9 @@ export class Simulation {
     const patrol = this.guards.filter((a) => a.alive !== false).indexOf(g) < patrolCount;
     if (patrol) {
       if (!g.goal || (g.f === g.goal.f && distance(g, g.goal) < 0.85) || g.think <= 0) {
-        const r = rooms.filter((r) => r.f === 1)[Math.floor(this.random() * 6)];
-        g.goal = { f: r.f, x: r.x, z: r.z + (r.z < 0 ? 2.5 : -2.5) };
+        const candidates = rooms.filter((r) => r.f === 1);
+        const r = candidates[Math.floor(this.random() * candidates.length)];
+        g.goal = { f: r.f, ...r.nav };
         g.think = 20;
         g.path = [];
       }
@@ -886,10 +872,10 @@ export class Simulation {
     const guests = this.guards.filter((g) => g.alive !== false && g.state === 'party' && !g.repair);
     if (!guests.length) return;
     const g = guests[this.routineIndex % guests.length];
-    const destinations = ['r1-4', 'r1-2', 'r2-4', 'r0-0'];
+    const destinations = ['r1-4', 'r1-2', 'r2-5', 'r1-2'];
     const destination = destinations[this.routineIndex++ % destinations.length];
     const r = rooms.find((r) => r.id === destination);
-    g.errand = { f: r.f, x: r.x, z: r.z + (r.z < 0 ? 2.5 : -2.5), wait: 14 };
+    g.errand = { f: r.f, ...r.nav, wait: 14 };
     g.path = [];
     g.goal = null;
   }
@@ -953,7 +939,7 @@ export class Simulation {
           (a, b) =>
             Math.abs(a.f - p.f) * 30 + distance(a, p) - Math.abs(b.f - p.f) * 30 - distance(b, p),
         )[0];
-      const target = isolated || { f: 1, x: -14, z: 0 };
+      const target = isolated || { f: 1, x: 7, z: 8 };
       this.navigate(p, target, dt, 1.8);
       if (isolated && isolated.f === p.f && distance(p, isolated) < 1.5) {
         this.stab(p);
@@ -965,12 +951,12 @@ export class Simulation {
         .sort((a, b) => distance(a, p) - distance(b, p))[0];
       if (!p.botEscape || this.time > p.botEscape.until || distance(p, p.botEscape) < 1) {
         const candidates = [
-          { f: 1, x: -24, z: -12 },
-          { f: 1, x: 24, z: 12 },
-          { f: 1, x: -24, z: 12 },
-          { f: 1, x: 24, z: -12 },
-          { f: 2, x: -14, z: 0 },
-          { f: 0, x: 14, z: 0 },
+          { f: 1, x: -33, z: -24 },
+          { f: 1, x: 33, z: 22 },
+          { f: 1, x: -33, z: 22 },
+          { f: 1, x: 32, z: -24 },
+          { f: 2, x: -3, z: 6 },
+          { f: 2, x: 9, z: -12 },
         ];
         p.botEscape = {
           ...candidates.sort((a, b) =>
@@ -1095,12 +1081,12 @@ export class Simulation {
         return;
       }
       const before = { f: g.f, x: g.x, z: g.z };
-      this.navigate(g, { f: 1, x: 14, z: 9 }, dt, 1.8);
+      this.navigate(g, CAPTURE_POINT, dt, 1.8);
       victim.f = g.f;
       victim.x = before.f === g.f ? before.x : g.x;
       victim.z = before.f === g.f ? before.z : g.z;
       victim.angle = g.angle;
-      if (g.f === 1 && distance(g, { x: 14, z: 9 }) < 1) {
+      if (g.f === CAPTURE_POINT.f && distance(g, CAPTURE_POINT) < 1) {
         g.state = 'search';
         g.target = null;
         victim.captor = null;
@@ -1226,7 +1212,7 @@ export class Simulation {
       const hs = hides.filter((h) => h.f === r.f && roomAt(h.f, h.x, h.z)?.id === r.id);
       const inspect =
         hs.length && (g.personality === 'méthodique' || this.random() < 0.25 + intensity * 0.6);
-      const point = inspect ? hs[Math.floor(this.random() * hs.length)] : { x: r.x, z: r.z + 3 };
+      const point = inspect ? hs[Math.floor(this.random() * hs.length)] : r.nav;
       g.goal = { x: point.x, z: point.z, f: r.f };
       g.state = inspect ? 'inspection' : 'patrol';
       g.think = 12 + this.random() * 10;
@@ -1259,13 +1245,18 @@ export class Simulation {
     if (!destination) return;
     let dest = destination;
     if (dest.f !== g.f) {
-      const s = stairs.find((s) => s.f === g.f && s.to === (dest.f > g.f ? g.f + 1 : g.f - 1));
+      const s = stairs
+        .filter((s) => s.f === g.f && s.to === dest.f)
+        .sort(
+          (a, b) =>
+            distance(g, a) + distance(a.landing, dest) - distance(g, b) - distance(b.landing, dest),
+        )[0];
       if (!s) return;
       dest = s;
       if (distance(g, s) < 0.65) {
         g.f = s.to;
-        g.x = s.to > s.f ? -15 : 15;
-        g.z = 0;
+        g.x = s.landing.x;
+        g.z = s.landing.z;
         g.path = [];
         g.pathAt = 0;
         return;

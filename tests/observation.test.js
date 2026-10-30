@@ -45,9 +45,9 @@ test('charged throws share their prediction, cap at twelve metres and make noise
 test('a predicted throw stops at walls and cancellation keeps the bottle', () => {
   const s = solo(),
     p = s.players[0];
-  Object.assign(p, { x: -19, z: 0, angle: Math.PI / 2 });
+  Object.assign(p, { x: -26, z: -1, angle: Math.PI / 2 });
   const path = bottleTrajectory(p, s.doorStates, 1);
-  assert.ok(path.x < -18.1);
+  assert.ok(path.x < -25.1);
   assert.equal(blocked(p.f, path.x, path.z, s.doorStates, 0.04), false);
   s.action(p.id, 'charge');
   advance(s, 0.5);
@@ -62,8 +62,8 @@ test('hearing behind a guest causes a gradual turn, with no visual detection unt
     p = s.players[0],
     g = s.guards[0];
   s.guards = [g];
-  Object.assign(g, { x: -10, z: 0, angle: 0, path: [] });
-  Object.assign(p, { x: -10, z: -1, torch: true });
+  Object.assign(g, { x: -34, z: 8, angle: 0, path: [] });
+  Object.assign(p, { x: -34, z: 7, torch: true });
   assert.equal(s.canSee(g, p), false);
   s.noise(1, p.x, p.z, 10, 'Des pas', p.id);
   s.updateGuest(g, 0.05);
@@ -79,9 +79,9 @@ test('hearing behind a guest causes a gradual turn, with no visual detection unt
 test('blood immediately behind a guest cannot be seen even within arm reach', () => {
   const s = solo(),
     g = s.guards[0];
-  Object.assign(g, { x: -10, z: 0, angle: 0 });
-  assert.equal(s.seesEvidence(g, { f: 1, x: -10, z: -0.6 }), false);
-  assert.equal(s.seesEvidence(g, { f: 1, x: -10, z: 0.6 }), true);
+  Object.assign(g, { x: -34, z: 8, angle: 0 });
+  assert.equal(s.seesEvidence(g, { f: 1, x: -34, z: 7.4 }), false);
+  assert.equal(s.seesEvidence(g, { f: 1, x: -34, z: 8.6 }), true);
 });
 
 test('a single guest physically reaches the breaker and restores power after a three-second repair', () => {
@@ -123,7 +123,7 @@ test('a missing friend prompts a local enquiry at a remembered place, without gr
   const s = solo(),
     missing = s.guards[0];
   missing.alive = false;
-  s.bodies = [{ id: 'hidden', guard: missing.id, hidden: 'h', f: 0, x: 5, z: 5 }];
+  s.bodies = [{ id: 'hidden', guard: missing.id, hidden: 'h', f: 2, x: 16, z: 12 }];
   s.time = 75;
   const memory = s.socialMemory.find((m) => m.id === missing.id);
   memory.lastSeen = 0;
@@ -131,7 +131,7 @@ test('a missing friend prompts a local enquiry at a remembered place, without gr
   const investigator = s.guards.find((g) => g.last);
   assert.ok(investigator);
   assert.deepEqual(investigator.last, memory.point);
-  assert.notEqual(investigator.last.f, 0);
+  assert.notEqual(investigator.last.f, 2);
   assert.equal(s.phase, 'infiltration');
   assert.ok(s.guards.every((g) => !g.armed));
 });

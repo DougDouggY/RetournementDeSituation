@@ -67,7 +67,7 @@ test('closed glass reveals only its room when close and aligned, and hides it wh
     p.z += n.z * 3;
     assert.equal(visibleRegions(p, {}).has(d.room), false);
   }
-  const p = { f: 1, x: -19, z: 4 };
+  const p = { f: 1, x: -26, z: 11 };
   assert.deepEqual([...visibleRegions(p, {})], ['outside']);
 });
 test('windows always block walking, even after unlocking; V climbs across with an animated height', () => {
@@ -101,10 +101,10 @@ test('climbing requires proximity, a clear landing and free hands', () => {
     p = s.players[0],
     d = doors.find((d) => d.id === 'window-office');
   s.doorStates[d.id] = true;
-  Object.assign(p, { x: -22, z: 7 });
+  Object.assign(p, { x: -29, z: 6 });
   s.action(p.id, 'climb');
   assert.equal(p.climb, null);
-  Object.assign(p, { x: -19, z: 7, dragging: 'occupied' });
+  Object.assign(p, { x: -26, z: 6, dragging: 'occupied' });
   s.action(p.id, 'climb');
   assert.equal(p.climb, null);
   p.dragging = null;
@@ -120,20 +120,19 @@ test('a closed window cannot be used to stab or pick up a body through the glass
     p = s.players[0],
     d = doors.find((d) => d.id === 'window-office'),
     g = s.guards[0];
-  Object.assign(p, { x: -18.5, z: 7 });
-  Object.assign(g, { x: -17.2, z: 7 });
+  Object.assign(p, { x: -25.5, z: 6 });
+  Object.assign(g, { x: -24.2, z: 6 });
   s.guards = [g];
   s.action(p.id, 'attack');
   assert.equal(g.alive, true);
-  s.bodies = [{ id: 'test', f: 1, x: -17.2, z: 7, draggedBy: null }];
+  s.bodies = [{ id: 'test', f: 1, x: -24.2, z: 6, draggedBy: null }];
   s.action(p.id, 'drag');
   assert.equal(p.dragging, null);
 });
-test('outside and basement breakers control the whole house; local switches cannot bypass an outage', () => {
+test('the outside breaker controls the whole villa; local switches cannot bypass an outage', () => {
   const s = solo(),
     p = s.players[0],
-    outside = devices.find((d) => d.type === 'breaker' && d.room === 'outside'),
-    basement = devices.find((d) => d.type === 'breaker' && d.f === 0);
+    outside = devices.find((d) => d.type === 'breaker' && d.room === 'outside');
   assert.equal(s.power, true);
   const initial = { ...s.lightStates };
   Object.assign(p, { f: outside.f, x: outside.x, z: outside.z });
@@ -146,7 +145,7 @@ test('outside and basement breakers control the whole house; local switches cann
   Object.assign(p, { f: light.f, x: light.x, z: light.z });
   s.interact(p.id);
   assert.equal(s.power, false);
-  Object.assign(p, { f: basement.f, x: basement.x, z: basement.z });
+  Object.assign(p, { f: outside.f, x: outside.x, z: outside.z });
   s.interact(p.id);
   assert.equal(s.power, true);
   assert.equal(s.lightStates[light.room], false);
@@ -159,8 +158,8 @@ test('power outage reduces guest detection while a flashlight can still reveal t
   const s = solo(),
     p = s.players[0],
     g = s.guards[0];
-  Object.assign(g, { x: -16, z: 0, angle: Math.PI / 2 });
-  Object.assign(p, { x: -10, z: 0, torch: false });
+  Object.assign(g, { x: -34, z: 8, angle: Math.PI / 2 });
+  Object.assign(p, { x: -28, z: 8, torch: false });
   assert.equal(s.canSee(g, p), true);
   s.power = false;
   assert.equal(s.canSee(g, p), false);
@@ -177,7 +176,7 @@ test('guests use doors for navigation and do not unlock windows merely by walkin
 test('a window can be unlocked from an oblique approach without reaching through other walls', () => {
   const s = solo(),
     p = s.players[0];
-  Object.assign(p, { x: -18.5925, z: 7.685 });
+  Object.assign(p, { x: -25.5925, z: 6.685 });
   assert.equal(s.nearby(p)?.obj.id, 'window-office');
   s.interact(p.id);
   s.setInput(p.id, { use: true });
@@ -190,11 +189,11 @@ test('a window can be unlocked from an oblique approach without reaching through
 test('an outage also reduces the distance at which an unarmed guest can discover blood', () => {
   const s = solo(),
     g = s.guards[0],
-    blood = { f: 1, x: -10, z: 0 };
-  Object.assign(g, { f: 1, x: -14, z: 0, angle: Math.PI / 2 });
+    blood = { f: 1, x: -28, z: 8 };
+  Object.assign(g, { f: 1, x: -32, z: 8, angle: Math.PI / 2 });
   assert.equal(s.seesEvidence(g, blood), true);
   s.power = false;
   assert.equal(s.seesEvidence(g, blood), false);
-  g.x = -11.5;
+  g.x = -29.5;
   assert.equal(s.seesEvidence(g, blood), true);
 });

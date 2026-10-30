@@ -2,7 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Simulation } from '../shared/simulation.js';
 import { Room, validCode, makeCode, allowedOrigin } from '../server/room.js';
-import { doors, stairs, hides, blocked, pathfind, lineClear, distance } from '../shared/map.js';
+import {
+  FLOOR_IDS,
+  WORLD,
+  doors,
+  stairs,
+  hides,
+  blocked,
+  pathfind,
+  lineClear,
+  distance,
+} from '../shared/map.js';
 function game(options) {
   const s = new Simulation({ scenario: 'hunt', ...options });
   s.addPlayer('a', 0);
@@ -77,8 +87,8 @@ test('ten-second intro; solo practice explicit; rematch resets state', () => {
   assert.equal(s.players[0].bottles, 3);
   assert.equal(s.doorStates['d1-0'], false);
 });
-test('all room entries, stairs and hide approaches reachable on three floors', () => {
-  for (let f = 0; f < 3; f++) {
+test('all room entries, stairs and hide approaches reachable on both floors', () => {
+  for (const f of FLOOR_IDS) {
     for (const d of doors.filter((d) => d.f === f))
       assert.ok(
         pathfind(f, { x: 0, z: 0 }, { x: d.x, z: d.z + (d.z < 0 ? -1.5 : 1.5) }).length,
@@ -95,57 +105,72 @@ test('all room entries, stairs and hide approaches reachable on three floors', (
 test('collisions: exterior, internal walls, doors, furniture', () => {
   const s = game(),
     p = s.players[0];
-  Object.assign(p, { f: 1, x: -10, z: -1 });
-  s.move(p, 0, -3);
-  assert.ok(p.z > -1.6);
+  Object.assign(p, { f: 1, x: 4, z: 1 });
+  s.move(p, -3, 0);
+  assert.ok(p.x > 3.3);
   s.doorStates['d1-0'] = true;
-  s.move(p, 0, -3);
-  assert.ok(p.z < -2);
-  Object.assign(p, { x: -2.6, z: -6 });
+  s.move(p, -3, 0);
+  assert.ok(p.x < 3);
+  Object.assign(p, { x: -5, z: -7 });
   s.move(p, 2, 0);
-  assert.ok(p.x < -2.4);
-  Object.assign(p, { x: -14, z: -5.5 });
-  s.move(p, 0, -2);
-  assert.ok(p.z > -6);
-  Object.assign(p, { x: 17, z: 0 });
+  assert.ok(p.x < -4.3);
+  Object.assign(p, { x: -17, z: -8 });
+  s.move(p, 0, -4);
+  assert.ok(p.z > -9);
+  Object.assign(p, { x: WORLD.maxX - 1, z: 20 });
   s.move(p, 10, 0);
-  assert.ok(p.x < 17.7);
+  assert.ok(p.x <= WORLD.maxX - 0.32);
 });
-test('every door toggles; every functional stair transitions correctly', () => {
+test('every door toggles; both staircases transition to their own clear landing', () => {
   const s = game(),
     p = s.players[0];
-  for (const d of doors.filter((d) => !d.exterior)) {
-    Object.assign(p, { f: d.f, x: d.x, z: d.z + (d.z < 0 ? 0.8 : -0.8), hidden: null });
-    assert.equal(s.nearby(p)?.kind, 'door', d.id);
+  for (const d of doors.filter((d) => !d.window)) {
+    const n = d.axis === 'z' ? { x: 1, z: 0 } : { x: 0, z: 1 };
+    let found = false;
+    for (const sign of [1, -1]) {
+      Object.assign(p, {
+        f: d.f,
+        x: d.x + n.x * 0.8 * sign,
+        z: d.z + n.z * 0.8 * sign,
+        hidden: null,
+      });
+      if (s.nearby(p)?.obj.id === d.id) {
+        found = true;
+        break;
+      }
+    }
+    assert.ok(found, d.id);
     s.interact(p.id);
-    assert.equal(s.doorStates[d.id], true);
+    assert.equal(s.doorStates[d.id], true, d.id);
     s.interact(p.id);
-    assert.equal(s.doorStates[d.id], false);
+    assert.equal(s.doorStates[d.id], false, d.id);
   }
-  for (const st of stairs.filter((st) => st.to !== null)) {
+  for (const st of stairs) {
     Object.assign(p, { f: st.f, x: st.x, z: st.z });
     s.interact(p.id);
     assert.equal(p.f, st.to);
-    assert.ok(!blocked(p.f, p.x, p.z, s.doorStates));
+    assert.equal(p.x, st.landing.x);
+    assert.equal(p.z, st.landing.z);
+    assert.equal(blocked(p.f, p.x, p.z, s.doorStates), false);
   }
 });
 test('directional vision blocked by walls, closed doors and opaque furniture; crouching helps', () => {
   const s = game(),
     g = s.guards[0],
     p = s.players[0];
-  Object.assign(g, { f: 1, x: -10, z: 0, angle: Math.PI });
-  Object.assign(p, { f: 1, x: -10, z: -3, input: {} });
+  Object.assign(g, { f: 1, x: 4, z: 1, angle: -Math.PI / 2 });
+  Object.assign(p, { f: 1, x: 2, z: 1, input: {} });
   assert.equal(s.canSee(g, p), false);
   s.doorStates['d1-0'] = true;
   assert.equal(s.canSee(g, p), true);
-  g.angle = 0;
+  g.angle = Math.PI / 2;
   assert.equal(s.canSee(g, p), false);
-  Object.assign(g, { x: -3, z: -9, angle: Math.PI / 2 });
-  Object.assign(p, { x: -1, z: -9 });
+  Object.assign(g, { x: -5, z: -7, angle: Math.PI / 2 });
+  Object.assign(p, { x: -3, z: -7 });
   assert.equal(s.canSee(g, p), false);
-  assert.equal(lineClear(1, { x: -16, z: -7 }, { x: -12, z: -7 }, s.doorStates), false);
-  Object.assign(g, { x: -10, z: 0, angle: Math.PI / 2 });
-  Object.assign(p, { x: -4, z: 0 });
+  assert.equal(lineClear(1, { x: -19, z: -10 }, { x: -15, z: -10 }, s.doorStates), false);
+  Object.assign(g, { x: -34, z: 8, angle: Math.PI / 2 });
+  Object.assign(p, { x: -28, z: 8 });
   assert.equal(s.canSee(g, p), true);
   p.input.crouch = true;
   assert.equal(s.canSee(g, p), false);
@@ -153,15 +178,15 @@ test('directional vision blocked by walls, closed doors and opaque furniture; cr
 test('hearing follows noise source, attenuates through walls, ignores other floors', () => {
   const s = game(),
     g = s.guards[0];
-  Object.assign(g, { f: 1, x: 0, z: 0, state: 'patrol' });
-  s.noise(1, 3, 0, 8, 'bottle');
+  Object.assign(g, { f: 1, x: -34, z: 8, state: 'patrol' });
+  s.noise(1, -31, 8, 8, 'bottle');
   assert.equal(g.state, 'suspicion');
-  assert.deepEqual(g.last, { f: 1, x: 3, z: 0 });
+  assert.deepEqual(g.last, { f: 1, x: -31, z: 8 });
   g.state = 'patrol';
-  s.noise(2, 0, 0, 20, 'upstairs');
+  s.noise(2, -34, 8, 20, 'upstairs');
   assert.equal(g.state, 'patrol');
-  Object.assign(g, { x: -3, z: -9 });
-  s.noise(1, 1, -9, 5, 'wall');
+  Object.assign(g, { x: -6, z: -7 });
+  s.noise(1, -2, -7, 5, 'wall');
   assert.equal(g.state, 'patrol');
 });
 test('hiding extinguishes torch, blocks vision, physical inspection finds player', () => {
@@ -261,7 +286,7 @@ test('eight agents navigate full nine-minute night without crossing obstacles or
     }
     previous = s.guards.map((g) => ({ ...g }));
   }
-  assert.deepEqual([...floors].sort(), [0, 1, 2]);
+  assert.deepEqual([...floors].sort(), [1, 2]);
   assert.ok(states.has('inspection'));
   assert.equal(s.phase, 'ended');
   assert.ok(performance.now() - start < 30000);

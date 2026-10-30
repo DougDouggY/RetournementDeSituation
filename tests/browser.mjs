@@ -82,7 +82,7 @@ try {
       a.evaluate(() => window.__RDS.state.players.find((p) => p.id === window.__RDS.myId));
   await a.keyboard.down('KeyD');
   await a.waitForFunction(
-    () => window.__RDS.state.players.find((p) => p.id === window.__RDS.myId).x > -19.6,
+    () => window.__RDS.state.players.find((p) => p.id === window.__RDS.myId).x > -26.05,
   );
   await a.keyboard.up('KeyD');
   await a.keyboard.press('KeyE');

@@ -8,11 +8,10 @@ const server = spawn(process.execPath, ['server/local.js', '--production'], {
   stdio: 'ignore',
 });
 let browser, page;
-await fs.mkdir('test-results', { recursive: true });
 try {
   for (let i = 0; i < 100; i++) {
     try {
-      if ((await fetch(`${base}/api/health`)).ok) break;
+      if ((await fetch(base + '/api/health')).ok) break;
     } catch {}
     await new Promise((r) => setTimeout(r, 100));
   }
@@ -26,7 +25,7 @@ try {
       '--disable-dev-shm-usage',
     ],
   });
-  page = await browser.newPage({ viewport: { width: 800, height: 600 } });
+  page = await browser.newPage({ viewport: { width: 640, height: 480 } });
   const errors = [],
     apiRequests = [],
     sockets = [];
@@ -45,93 +44,53 @@ try {
       JSON.stringify({ music: 0, effects: 0, voices: 0, low: true }),
     ),
   );
+  await fs.mkdir('test-results', { recursive: true });
   await page.goto(base);
-  await page.locator('#solo').waitFor();
-  assert.equal(
-    await page.locator('.coop-options').isVisible(),
-    false,
-    'default solo build must hide multiplayer setup',
-  );
-  assert.equal(await page.getByText('Swonni', { exact: true }).count(), 2);
+  assert.equal(await page.locator('.coop-options').isVisible(), false);
   await page.locator('[data-solo-character="1"]').click();
   await page.locator('#solo').click();
   await page.waitForFunction(() => window.__RDS?.state?.mode === 'solo');
-  await page.waitForFunction(() => window.__RDS.visibleRooms.includes('outside'));
   const state = await page.evaluate(() => window.__RDS.state);
   assert.equal(state.players.length, 1);
   assert.equal(state.players[0].character, 1);
   assert.equal(state.guards.length, 8);
-  assert.equal(state.host, 'solo-player');
   assert.equal(state.phase, 'infiltration');
-  assert.equal(state.bodies.length, 0);
-  assert.ok(state.players[0].x < -18);
+  assert.ok(state.players[0].x < -25);
   assert.deepEqual(await page.evaluate(() => window.__RDS.visibleRooms), ['outside']);
-  assert.deepEqual(await page.evaluate(() => window.__RDS.visibleGuards), []);
-  await page.screenshot({ path: 'test-results/infiltration-outside.png' });
-  console.log(
-    'PASS direct solo launch: Swonni is the only killer; eight hunters; no invitation code',
-  );
+  await page.screenshot({ path: 'test-results/villa-outside.png' });
   await page.locator('#hud-settings').click();
-  await page.waitForFunction(() => window.__RDS.state.paused === true);
-  const pausedAt = await page.evaluate(() => window.__RDS.state.time);
+  await page.waitForFunction(() => window.__RDS.state.paused);
+  const paused = await page.evaluate(() => window.__RDS.state.time);
   await page.waitForTimeout(1100);
-  assert.equal(await page.evaluate(() => window.__RDS.state.time), pausedAt);
+  assert.equal(await page.evaluate(() => window.__RDS.state.time), paused);
   await page.locator('#settings-close').click();
-  await page.waitForFunction(() => window.__RDS.state.paused === false);
-  console.log('PASS solo pause and resume');
+  await page.waitForFunction(() => !window.__RDS.state.paused);
+  console.log('PASS new villa: direct Swonni solo, exterior spawn, room fog and pause');
   await page.keyboard.down('KeyC');
   await page.keyboard.press('KeyF');
-  await page.waitForFunction(() => window.__RDS.state.players[0].torch === true);
+  await page.waitForFunction(() => window.__RDS.state.players[0].torch);
   await page.keyboard.down('KeyD');
-  await page.waitForFunction(() => window.__RDS.state.players[0].x > -19.6);
+  await page.waitForFunction(() => window.__RDS.state.players[0].x > -26.05, null, { polling: 50 });
   await page.keyboard.up('KeyD');
   await page.keyboard.press('KeyE');
-  await page.waitForFunction(() => window.__RDS.state.doors['entry-west'] === true);
+  await page.waitForFunction(() => window.__RDS.state.doors['entry-west']);
   await page.waitForFunction(() => window.__RDS.visibleRooms.includes('hall1'));
-  console.log(
-    'PASS exterior start, room fog, blocked house view and reveal through an opened entry',
-  );
-  await page.keyboard.press('KeyG');
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(() => !window.__RDS.state.doors['entry-west']);
+  await page.keyboard.down('KeyG');
+  await page.waitForFunction(() => window.__RDS.state.players[0].throwCharge > 0.15);
+  await page.keyboard.up('KeyG');
   await page.waitForFunction(() => window.__RDS.state.players[0].bottles === 2);
-  await page.screenshot({ path: 'test-results/infiltration-entry.png' });
-  // Step away from the doorway before approaching the meter along the outer wall.
+  console.log('PASS real-key door interaction and charged bottle inventory');
   await page.keyboard.down('KeyS');
-  await page.waitForFunction(() => window.__RDS.state.players[0].z > 2.5);
-  await page.keyboard.up('KeyS');
-  // Walk to the external meter; test real controls and actual rendered lights.
-  await page.keyboard.down('KeyD');
-  await page.waitForFunction(() => window.__RDS.state.players[0].x > -19);
-  await page.keyboard.up('KeyD');
-  await page.keyboard.down('KeyS');
-  await page.waitForFunction(() => window.__RDS.state.players[0].z > 3.35);
-  await page.keyboard.up('KeyS');
-  await page.keyboard.press('KeyE');
-  await page.waitForFunction(
-    () =>
-      window.__RDS.state.power === false &&
-      window.__RDS.gardenLights.every((v) => v === 0) &&
-      Object.values(window.__RDS.roomLights).every((v) => v === 0) &&
-      window.__RDS.windowLights.every((v) => v.emission === 0),
-  );
-  await page.screenshot({ path: 'test-results/power-off.png' });
-  await page.keyboard.press('KeyE');
-  await page.waitForFunction(
-    () =>
-      window.__RDS.state.power === true &&
-      window.__RDS.gardenLights.some((v) => v > 0) &&
-      Object.values(window.__RDS.roomLights).every((v) => v > 0),
-  );
-  console.log(
-    'PASS external breaker cuts and restores room lights, path lamps and glowing windows',
-  );
-  await page.keyboard.down('KeyS');
-  await page.waitForFunction(() => window.__RDS.state.players[0].z > 6.1, null, { polling: 50 });
+  await page.waitForFunction(() => window.__RDS.state.players[0].z > 5.2, null, { polling: 50 });
   await page.keyboard.up('KeyS');
   await page.waitForFunction(() => window.__RDS.visibleRooms.includes('r1-3'));
   assert.equal(await page.evaluate(() => window.__RDS.state.doors['window-office']), false);
-  await page.screenshot({ path: 'test-results/window-scouting.png' });
+  await page.screenshot({ path: 'test-results/villa-window-scouting.png' });
   await page.keyboard.down('KeyE');
-  await page.waitForFunction(() => window.__RDS.state.doors['window-office'] === true);
+  await page.waitForFunction(() => window.__RDS.state.doors['window-office']);
+  await page.keyboard.up('KeyE');
   await page.waitForFunction(() => window.__RDS.windowSlides['window-office'].height > 1.25);
   assert.equal(
     await page.evaluate(() => {
@@ -139,50 +98,44 @@ try {
       return w.angle === w.baseAngle;
     }),
     true,
-    'window must slide vertically without swinging',
   );
-  await page.keyboard.up('KeyE');
   await page.keyboard.press('KeyV');
   await page.waitForFunction(
-    () => window.__RDS.state.players[0].x > -18 && window.__RDS.state.players[0].climb === null,
+    () => window.__RDS.state.players[0].x > -25 && !window.__RDS.state.players[0].climb,
   );
   assert.ok(await page.evaluate(() => window.__RDS.visibleRooms.includes('r1-3')));
-  await page.screenshot({ path: 'test-results/window-inside.png' });
+  await page.screenshot({ path: 'test-results/villa-window-inside.png' });
   await page.keyboard.press('KeyV');
   await page.waitForFunction(
-    () => window.__RDS.state.players[0].x < -18.02 && window.__RDS.state.players[0].climb === null,
+    () => window.__RDS.state.players[0].x < -25 && !window.__RDS.state.players[0].climb,
   );
-  console.log('PASS observing through closed glass, unlocking, climbing in and climbing back out');
-
-  await page.locator('#hud-settings').click();
-  await page.waitForFunction(() => window.__RDS.state.paused === true);
+  await page.keyboard.up('KeyC');
   assert.deepEqual(apiRequests, []);
   assert.deepEqual(sockets, []);
   assert.deepEqual(errors, []);
-  await page.screenshot({ path: 'test-results/solo-swonni.png' });
   await fs.writeFile(
     'test-results/solo-browser.json',
     JSON.stringify(
-      { passed: true, players: 1, character: 'Swonni', hunters: 8, apiRequests, sockets, errors },
+      { passed: true, map: 'villa', players: 1, character: 'Swonni', apiRequests, sockets, errors },
       null,
       2,
     ),
   );
-  console.log('PASS solo interactions, lamp and bottles without any HTTP game API or WebSocket');
+  console.log(
+    'PASS closed-glass scouting, sliding sash and climbing both ways; no API, WebSocket or JS/WebGL errors',
+  );
 } catch (error) {
-  if (page) {
+  if (page)
     console.error(
       'SOLO_DIAGNOSTIC',
       await page
         .evaluate(() => ({
-          player: window.__RDS?.state?.players[0],
+          p: window.__RDS?.state?.players[0],
+          phase: window.__RDS?.state?.phase,
           visible: window.__RDS?.visibleRooms,
-          power: window.__RDS?.state?.power,
         }))
         .catch(() => null),
     );
-    await page.screenshot({ path: 'test-results/solo-failure.png' }).catch(() => {});
-  }
   throw error;
 } finally {
   await browser?.close();

@@ -1,19 +1,15 @@
-// One deterministic collision/interaction map shared by renderer and authority.
-export const FLOORS = ['Sous-sol', 'Rez-de-chaussée', 'Étage'];
+// The playable villa: ground floor (1), upper floor (2), and a shared garden.
+// Floor identifiers stay stable for saved character state; there is no floor 0.
+export const FLOOR_IDS = [1, 2];
+export const FLOORS = { 1: 'Rez-de-chaussée', 2: 'Étage' };
 export const NIGHT = 540;
-export const WORLD = { minX: -27, maxX: 27, minZ: -22, maxZ: 22 };
-const layouts = [
-  ['Cave à vin', 'Local électrique', 'Buanderie', 'Réserve', 'Archives', 'Chambre froide'],
-  ['Salon', 'Salle à manger', 'Cuisine', 'Bureau', 'Salle de bains', 'Garage'],
-  [
-    'Chambre principale',
-    'Chambre d’amis',
-    'Chambre bleue',
-    'Dressing',
-    'Salle de bains',
-    'Débarras',
-  ],
-];
+export const WORLD = { minX: -38, maxX: 38, minZ: -43, maxZ: 28 };
+export const HOUSE = { minX: -25, maxX: 25, minZ: -16, maxZ: 16 };
+export const POOL = { f: 1, x: 4, z: -33, w: 20, d: 8 };
+export const TERRACE = { f: 1, x: -1, z: -22, w: 46, d: 12 };
+export const ATRIUM = { f: 2, x: 3, z: -5, w: 8, d: 6 };
+export const SPAWN = { f: 1, x: -30, z: -1 };
+export const CAPTURE_POINT = { f: 1, x: 22, z: 11 };
 export const rooms = [],
   walls = [],
   doors = [],
@@ -21,300 +17,352 @@ export const rooms = [],
   hides = [],
   devices = [],
   stairs = [];
-// Each floor and each side of the hall has its own partitions.
-const partitions = [
-  [
-    [-18, -6, 2, 18],
-    [-18, -10, 6, 18],
-  ],
-  [
-    [-18, -2, 8, 18],
-    [-18, -8, 0, 18],
-  ],
-  [
-    [-18, -4, 4, 18],
-    [-18, -9, 0, 18],
-  ],
+const rect = (left, top, right, bottom) => ({
+  x: (left + right) / 2,
+  z: (top + bottom) / 2,
+  w: right - left,
+  d: bottom - top,
+});
+function room(id, name, parts, nav, style) {
+  const left = Math.min(...parts.map((p) => p.x - p.w / 2)),
+    right = Math.max(...parts.map((p) => p.x + p.w / 2));
+  const top = Math.min(...parts.map((p) => p.z - p.d / 2)),
+    bottom = Math.max(...parts.map((p) => p.z + p.d / 2));
+  rooms.push({
+    id,
+    f: Number(id[1]),
+    name,
+    ...rect(left, top, right, bottom),
+    parts,
+    nav,
+    style,
+    area: parts.reduce((a, p) => a + p.w * p.d, 0),
+  });
+}
+room(
+  'r1-0',
+  'Grand salon en L',
+  [rect(-25, -16, -4, -2), rect(-10, -2, 3, 4)],
+  { x: -12, z: -5 },
+  0,
+);
+room('r1-1', 'Salle à manger', [rect(-4, -16, 11, -4)], { x: 4, z: -6 }, 1);
+room('r1-2', 'Cuisine', [rect(11, -16, 25, -4)], { x: 21, z: -6 }, 2);
+room('r1-3', 'Bureau / bibliothèque', [rect(-25, 0, -10, 12)], { x: -13, z: 8 }, 1);
+room('r1-4', 'WC / vestiaire', [rect(11, 0, 25, 6)], { x: 14, z: 3 }, 3);
+room('r1-5', 'Garage / buanderie', [rect(11, 6, 25, 16)], { x: 13, z: 8 }, 2);
+room(
+  'r2-0',
+  'Suite principale',
+  [rect(-25, -16, -5, -2), rect(-25, -2, -17, 2)],
+  { x: -9, z: -6 },
+  4,
+);
+room('r2-1', 'Salle de bains privée', [rect(-1, -16, 7, -10)], { x: 2, z: -13 }, 3);
+room('r2-2', 'Chambre d’amis', [rect(11, -16, 25, -2)], { x: 14, z: -6 }, 5);
+room('r2-3', 'Chambre / bureau', [rect(-25, 2, -9, 16)], { x: -12, z: 5 }, 4);
+room('r2-4', 'Chambre bleue', [rect(-9, 8, 9, 16), rect(2, 4, 9, 8)], { x: 5, z: 6 }, 2);
+room('r2-5', 'Salle de bains / WC', [rect(13, 2, 25, 9)], { x: 16, z: 5 }, 3);
+room('r2-6', 'Lingerie', [rect(13, 9, 25, 16)], { x: 16, z: 12 }, 1);
+export const PARTY_SPOTS = [
+  { f: 1, x: -20, z: -10 },
+  { f: 1, x: -17, z: -4 },
+  { f: 1, x: -14, z: -13 },
+  { f: 1, x: 2, z: -6.5 },
+  { f: 1, x: 7, z: -6.5 },
+  { f: 1, x: -14, z: -22 },
+  { f: 1, x: -10, z: -22 },
+  { f: 1, x: -6, z: -22 },
 ];
 export const gardenLamps = [
-  ...[-25, -22, -19].flatMap((x) => [-1.8, 1.8].map((z) => ({ x, z }))),
-  ...[-14, -5, 5, 14].flatMap((x) => [-14, 14].map((z) => ({ x, z }))),
-  ...[-7, 0, 7].map((z) => ({ x: 21, z })),
-  ...[-8, 8].map((z) => ({ x: -21, z })),
+  ...[-35, -31, -27].flatMap((x) => [-3, 1].map((z) => ({ x, z }))),
+  ...[-22, -11, 0, 11, 22].flatMap((x) => [-19, 19].map((z) => ({ x, z }))),
+  ...[-10, 0, 10].map((z) => ({ x: 28, z })),
+  ...[-10, 18].map((x) => ({ x, z: -38 })),
 ];
-const portals = [
-  { id: 'entry-west', f: 1, x: -18, z: 0, w: 0.25, d: 2.4, axis: 'z', exterior: true },
-  { id: 'entry-east', f: 1, x: 18, z: 0, w: 0.25, d: 2.4, axis: 'z', exterior: true },
-  {
-    id: 'window-salon',
-    f: 1,
-    x: -12,
-    z: -12,
-    w: 2,
-    d: 0.25,
+function door(id, f, x, z, axis = 'x', width = 2, extra = {}) {
+  doors.push({
+    id,
+    f,
+    x,
+    z,
+    axis,
+    w: axis === 'z' ? 0.24 : width,
+    d: axis === 'z' ? width : 0.24,
+    ...extra,
+  });
+}
+door('entry-west', 1, -25, -1, 'z', 2, { exterior: true, normal: { x: -1, z: 0 } });
+door('entry-main', 1, 0, 16, 'x', 3, { exterior: true, normal: { x: 0, z: 1 } });
+door('entry-east', 1, 25, 10, 'z', 2, { exterior: true, normal: { x: 1, z: 0 }, room: 'r1-5' });
+door('patio-salon', 1, -17, -16, 'x', 4, {
+  exterior: true,
+  normal: { x: 0, z: -1 },
+  room: 'r1-0',
+  patio: true,
+});
+door('patio-dining', 1, 3, -16, 'x', 4, {
+  exterior: true,
+  normal: { x: 0, z: -1 },
+  room: 'r1-1',
+  patio: true,
+});
+door('entry-kitchen', 1, 25, -11, 'z', 2, { exterior: true, normal: { x: 1, z: 0 }, room: 'r1-2' });
+for (const [id, x, z, axis, r] of [
+  ['salon', -8, -16, 'x', 'r1-0'],
+  ['dining', 8, -16, 'x', 'r1-1'],
+  ['kitchen', 25, -7, 'z', 'r1-2'],
+  ['office', -25, 6, 'z', 'r1-3'],
+  ['bathroom', 25, 3, 'z', 'r1-4'],
+  ['garage', 15, 16, 'x', 'r1-5'],
+])
+  door('window-' + id, 1, x, z, axis, 2, {
     window: true,
     exterior: true,
-    room: 'r1-0',
-  },
+    room: r,
+    normal: axis === 'z' ? { x: Math.sign(x), z: 0 } : { x: 0, z: Math.sign(z) },
+  });
+for (const [id, x, z, axis, width, r] of [
+  ['d1-0', 3, 1, 'z', 2, 'r1-0'],
+  ['d1-0-west', -10, -1, 'z', 2, 'r1-0'],
+  ['d1-1', 4, -4, 'x', 2, 'r1-1'],
+  ['d1-2', 18, -4, 'x', 2, 'r1-2'],
+  ['d1-3', -10, 8, 'z', 2, 'r1-3'],
+  ['d1-3-west', -18, 0, 'x', 2, 'r1-3'],
+  ['d1-4', 11, 3, 'z', 2, 'r1-4'],
+  ['d1-5', 11, 10, 'z', 2, 'r1-5'],
+  ['salon-dining', -4, -10, 'z', 3, 'r1-0'],
+  ['dining-kitchen', 11, -10, 'z', 2, 'r1-1'],
+  ['wc-garage', 19, 6, 'x', 2, 'r1-4'],
+])
+  door(id, 1, x, z, axis, width, { room: r });
+for (const [id, x, z, axis, r] of [
+  ['d2-0', -5, -7, 'z', 'r2-0'],
+  ['suite-connecting', -20, 2, 'x', 'r2-0'],
+  ['d2-1', -1, -13, 'z', 'r2-1'],
+  ['d2-2', 11, -7, 'z', 'r2-2'],
+  ['d2-3', -14, 2, 'x', 'r2-3'],
+  ['d2-4', 5, 4, 'x', 'r2-4'],
+  ['bedrooms-connecting', -9, 12, 'z', 'r2-4'],
+  ['d2-5', 13, 6, 'z', 'r2-5'],
+  ['d2-6', 13, 12, 'z', 'r2-6'],
+])
+  door(id, 2, x, z, axis, 2, { room: r });
+stairs.push(
   {
-    id: 'window-dining',
+    id: 'main-up',
     f: 1,
-    x: 3,
-    z: -12,
-    w: 2,
-    d: 0.25,
-    window: true,
-    exterior: true,
-    room: 'r1-1',
+    x: -3,
+    z: 10,
+    to: 2,
+    landing: { x: -3, z: 6 },
+    name: 'Escalier principal',
+    axis: 'z',
   },
   {
-    id: 'window-kitchen',
+    id: 'main-down',
+    f: 2,
+    x: -3,
+    z: 6,
+    to: 1,
+    landing: { x: -3, z: 10 },
+    name: 'Escalier principal',
+    axis: 'z',
+  },
+  {
+    id: 'service-up',
     f: 1,
     x: 18,
-    z: -7,
-    w: 0.25,
-    d: 2,
+    z: -2,
+    to: 2,
+    landing: { x: 18, z: 0 },
+    name: 'Escalier de service',
     axis: 'z',
-    window: true,
-    exterior: true,
-    room: 'r1-2',
   },
   {
-    id: 'window-office',
-    f: 1,
-    x: -18,
-    z: 7,
-    w: 0.25,
-    d: 2,
+    id: 'service-down',
+    f: 2,
+    x: 18,
+    z: 0,
+    to: 1,
+    landing: { x: 18, z: -2 },
+    name: 'Escalier de service',
     axis: 'z',
-    window: true,
-    exterior: true,
-    room: 'r1-3',
   },
-  {
-    id: 'window-bathroom',
-    f: 1,
-    x: -4,
-    z: 12,
-    w: 2,
-    d: 0.25,
-    window: true,
-    exterior: true,
-    room: 'r1-4',
-  },
-  {
-    id: 'window-garage',
-    f: 1,
-    x: 12,
-    z: 12,
-    w: 2,
-    d: 0.25,
-    window: true,
-    exterior: true,
-    room: 'r1-5',
-  },
-];
-let id = 0;
-function prop(f, room, type, x, z, w, d, options = {}) {
-  const r = rooms.find((r) => r.id === room);
-  if (r) {
-    const sx = r.w / 12,
-      sz = r.d / 10;
-    x = r.x + (x - r.x) * sx;
-    z = r.z + (z - r.z) * sz;
-    w *= sx;
-    d *= sz;
-  }
-  // Large furniture rests against a wall, with its access face kept clear.
-  if (r && ['wardrobe', 'fridge'].includes(type)) x = r.x + r.w / 2 - w / 2 - 0.14;
-  if (r && ['shelf', 'counter', 'tv', 'sink', 'washer', 'bath', 'bed'].includes(type)) {
-    if (d > w && type !== 'bed') x = r.x + r.w / 2 - w / 2 - 0.14;
-    else z = r.z + (r.z < 0 ? -1 : 1) * (r.d / 2 - d / 2 - 0.14);
-  }
-  if (r && type === 'plant') {
-    x = r.x + r.w / 2 - w / 2 - 0.3;
-    z = r.z + (r.z < 0 ? 1 : -1) * (r.d / 2 - d / 2 - 1);
-    if (props.some((p) => p.room === room && p.solid && inside(x, z, p, Math.max(w, d) / 2))) {
-      x = r.x - r.w / 2 + w / 2 + 0.3;
-      z = r.z;
+);
+export function houseContains(f, x, z) {
+  if (
+    !FLOOR_IDS.includes(f) ||
+    x < HOUSE.minX ||
+    x > HOUSE.maxX ||
+    z < HOUSE.minZ ||
+    z > HOUSE.maxZ
+  )
+    return false;
+  return f === 2 || !(x < -10 && z > 12);
+}
+export function houseFloorParts(f) {
+  return f === 1
+    ? [rect(-25, -16, 25, 12), rect(-10, 12, 25, 16)]
+    : [rect(-25, -16, -1, 16), rect(7, -16, 25, 16), rect(-1, -16, 7, -8), rect(-1, -2, 7, 16)];
+}
+export function roomAt(f, x, z) {
+  return rooms.find((r) => r.f === f && r.parts.some((p) => inside(x, z, p)));
+}
+export function regionAt(f, x, z) {
+  if (!FLOOR_IDS.includes(f)) return 'void';
+  if (f === 2 && inside(x, z, ATRIUM)) return 'void';
+  if (!houseContains(f, x, z)) return f === 1 ? 'outside' : 'void';
+  return roomAt(f, x, z)?.id || `hall${f}`;
+}
+// Boundaries come from the actual room footprints, including their recesses and atrium.
+// Unit segments are merged after cutting openings, so collision and cutaway walls agree.
+for (const f of FLOOR_IDS) {
+  const segments = [];
+  for (let x = -25; x <= 25; x += 0.5)
+    for (let z = -16; z < 16; z += 0.5) {
+      const a = regionAt(f, x - 0.05, z + 0.25),
+        b = regionAt(f, x + 0.05, z + 0.25);
+      if (a === b || [a, b].every((r) => r === 'outside' || r === 'void')) continue;
+      if (
+        doors.some(
+          (d) => d.f === f && d.axis === 'z' && d.x === x && Math.abs(z + 0.25 - d.z) < d.d / 2,
+        )
+      )
+        continue;
+      segments.push({ axis: 'z', constant: x, start: z, a, b });
+    }
+  for (let z = -16; z <= 16; z += 0.5)
+    for (let x = -25; x < 25; x += 0.5) {
+      const a = regionAt(f, x + 0.25, z - 0.05),
+        b = regionAt(f, x + 0.25, z + 0.05);
+      if (a === b || [a, b].every((r) => r === 'outside' || r === 'void')) continue;
+      if (
+        doors.some(
+          (d) => d.f === f && d.axis !== 'z' && d.z === z && Math.abs(x + 0.25 - d.x) < d.w / 2,
+        )
+      )
+        continue;
+      segments.push({ axis: 'x', constant: z, start: x, a, b });
+    }
+  segments.sort(
+    (a, b) => a.axis.localeCompare(b.axis) || a.constant - b.constant || a.start - b.start,
+  );
+  let previous;
+  for (const s of segments) {
+    if (
+      previous &&
+      s.axis === previous.axis &&
+      s.constant === previous.constant &&
+      s.start === previous.end &&
+      s.a === previous.a &&
+      s.b === previous.b
+    ) {
+      previous.end += 0.5;
+    } else {
+      previous = { ...s, end: s.start + 0.5 };
+      walls.push(previous);
     }
   }
-  // Leave a landing beside the glass; shorten long wall units when necessary.
-  for (const win of portals.filter((win) => win.room === room)) {
-    if (win.axis === 'z' && Math.abs(x - win.x) < w / 2 + 1.6 && Math.abs(z - win.z) < d / 2 + 1) {
-      const low = r.z - r.d / 2 + 0.14,
-        high = r.z + r.d / 2 - 0.14;
-      const side = win.z - low > high - win.z ? -1 : 1;
-      d = Math.min(d, (side < 0 ? win.z - low : high - win.z) - 1.2);
-      z = win.z + side * (1.2 + d / 2);
-    }
-    if (win.axis !== 'z' && Math.abs(z - win.z) < d / 2 + 1.6 && Math.abs(x - win.x) < w / 2 + 1) {
-      const low = r.x - r.w / 2 + 0.14,
-        high = r.x + r.w / 2 - 0.14;
-      const side = win.x - low > high - win.x ? -1 : 1;
-      w = Math.min(w, (side < 0 ? win.x - low : high - win.x) - 1.2);
-      x = win.x + side * (1.2 + w / 2);
-    }
-  }
-  if (r?.cutout && inside(x, z, r.cutout, Math.max(w, d) / 2 + 0.15)) {
-    z = r.cutout.z + (r.z < 0 ? -1 : 1) * (r.cutout.d / 2 + d / 2 + 0.15);
-  }
-  const p = { id: `p${id++}`, f, room, type, x, z, w, d, solid: true, ...options };
-  props.push(p);
-  if (options.hide)
-    hides.push({
-      id: `h${id++}`,
+  for (const w of walls.filter((w) => w.f === undefined))
+    Object.assign(w, {
       f,
-      x: x + (options.accessX || 0),
-      z: z + d / 2 + 0.6,
-      prop: p.id,
-      kind: type,
+      x: w.axis === 'x' ? (w.start + w.end) / 2 : w.constant,
+      z: w.axis === 'z' ? (w.start + w.end) / 2 : w.constant,
+      w: w.axis === 'x' ? w.end - w.start : 0.22,
+      d: w.axis === 'z' ? w.end - w.start : 0.22,
     });
+}
+let id = 0;
+function prop(f, room, type, x, z, w, d, extra = {}) {
+  const p = { id: `p${id++}`, f, room, type, x, z, w, d, solid: true, ...extra };
+  props.push(p);
+  if (extra.hide) hides.push({ id: `h${id++}`, f, prop: p.id, kind: type, x, z });
   return p;
 }
 function device(f, room, type, x, z) {
-  const r = rooms.find((r) => r.id === room);
-  if (r) {
-    x = r.x + ((x - r.x) * r.w) / 12;
-    z = r.z + ((z - r.z) * r.d) / 10;
-  }
   devices.push({ id: `v${id++}`, f, room, type, x, z });
 }
-function wall(f, x, z, w, d) {
-  walls.push({ f, x, z, w, d });
+prop(1, 'r1-0', 'sofa', -17, -6.5, 6, 2, { hide: true });
+prop(1, 'r1-0', 'sofa', -8, -10, 2, 5, { hide: true });
+prop(1, 'r1-0', 'table', -17, -10, 3, 1.5);
+prop(1, 'r1-0', 'tv', -11, -15.35, 4, 0.9);
+prop(1, 'r1-0', 'shelf', -7, 3.35, 4, 1, { hide: true });
+prop(1, 'r1-0', 'chair', 0, 1, 1.2, 1.2);
+prop(1, 'r1-0', 'rug', -17, -9, 9, 7, { solid: false });
+prop(1, 'r1-1', 'table', 3, -11, 7, 3);
+for (const x of [0, 6]) for (const z of [-13.3, -8.7]) prop(1, 'r1-1', 'chair', x, z, 1, 1);
+prop(1, 'r1-1', 'shelf', 10, -13, 1.5, 4, { hide: true });
+prop(1, 'r1-2', 'counter', 18, -15.2, 7, 1.1);
+prop(1, 'r1-2', 'fridge', 23.9, -14, 1.7, 2.2, { hide: true });
+prop(1, 'r1-2', 'table', 17, -10, 4, 2.4);
+prop(1, 'r1-2', 'sink', 24.2, -5.5, 1.1, 2);
+prop(1, 'r1-3', 'desk', -17, 5, 5, 2);
+prop(1, 'r1-3', 'chair', -17, 7, 1, 1);
+prop(1, 'r1-3', 'shelf', -24.25, 9.5, 1.2, 4, { hide: true });
+prop(1, 'r1-3', 'sofa', -14, 11, 5, 1.5, { hide: true });
+prop(1, 'r1-3', 'wardrobe', -11, 2, 1.5, 2, { hide: true });
+prop(1, 'r1-4', 'sink', 17, 0.8, 3, 1.2);
+prop(1, 'r1-4', 'toilet', 23.8, 1.3, 1.2, 1.8);
+prop(1, 'r1-4', 'wardrobe', 24, 5, 1.5, 1.4, { hide: true });
+prop(1, 'r1-5', 'car', 17.5, 10.7, 4, 6);
+prop(1, 'r1-5', 'shelf', 12, 13.5, 1.5, 4, { hide: true });
+prop(1, 'r1-5', 'boxes', 23, 7, 2, 1.5, { hide: true });
+prop(1, 'r1-5', 'washer', 22.5, 15, 3, 1.5);
+prop(1, 'r1-5', 'chair', CAPTURE_POINT.x, CAPTURE_POINT.z, 0.8, 0.8, { solid: false });
+for (const [rid, x, z, wx, wz, dx, dz] of [
+  ['r2-0', -16, -13.35, -23.8, -13, -8, -15],
+  ['r2-2', 18, -13.35, 23.8, -13, 14, -15],
+  ['r2-3', -17, 4.65, -23.8, 12, -13, 15],
+  ['r2-4', 0, 10.65, 7.8, 13, -5, 15],
+]) {
+  prop(2, rid, 'bed', x, z, 4, 5, { hide: true });
+  prop(2, rid, 'wardrobe', wx, wz, 1.8, 4, { hide: true });
+  prop(2, rid, 'desk', dx, dz, 4, 1.3);
+  prop(2, rid, 'rug', x, z + 1, 6, 5, { solid: false });
 }
-for (let f = 0; f < 3; f++) {
-  for (const [axis, constant] of [
-    ['x', -12],
-    ['x', 12],
-    ['z', -18],
-    ['z', 18],
-  ]) {
-    const horizontal = axis === 'x',
-      min = horizontal ? -18 : -12,
-      max = horizontal ? 18 : 12;
-    const gaps =
-      f === 1
-        ? portals
-            .filter((d) => (horizontal ? d.z === constant : d.x === constant))
-            .sort((a, b) => (horizontal ? a.x - b.x : a.z - b.z))
-        : [];
-    let start = min;
-    for (const d of [...gaps, null]) {
-      const end = d ? (horizontal ? d.x - d.w / 2 : d.z - d.d / 2) : max;
-      if (end > start)
-        wall(
-          f,
-          horizontal ? (start + end) / 2 : constant,
-          horizontal ? constant : (start + end) / 2,
-          horizontal ? end - start : 0.25,
-          horizontal ? 0.25 : end - start,
-        );
-      if (d) start = horizontal ? d.x + d.w / 2 : d.z + d.d / 2;
-    }
-  }
-  if (f === 1) doors.push(...portals);
-  for (let row = 0; row < 2; row++)
-    for (let col = 0; col < 3; col++) {
-      const edges = partitions[f][row],
-        left = edges[col],
-        right = edges[col + 1];
-      const x = (left + right) / 2,
-        z = row ? 7 : -7,
-        index = row * 3 + col;
-      const r = {
-        id: `r${f}-${index}`,
-        f,
-        x,
-        z,
-        w: right - left,
-        d: 10,
-        name: layouts[f][index],
-        style: (f * 2 + index) % 6,
-      };
-      rooms.push(r);
-      const boundary = row ? 2 : -2;
-      if (col > 0) wall(f, left, z, 0.2, 10);
-      // An entrance recess gives selected rooms an L-shaped footprint.
-      const notch = index % 2 === 1 ? Math.min(2.4, r.w / 4) : 0;
-      if (notch) {
-        r.cutout = { x: left + notch / 2, z: boundary + (row ? 1 : -1), w: notch, d: 2 };
-        wall(f, left + notch / 2, boundary + (row ? 2 : -2), notch, 0.2);
-        wall(f, left + notch, boundary + (row ? 1 : -1), 0.2, 2);
-      }
-      wall(f, (left + notch + x - 1) / 2, boundary, x - 1 - left - notch, 0.2);
-      wall(f, (x + 1 + right) / 2, boundary, right - x - 1, 0.2);
-      doors.push({ id: `d${f}-${index}`, f, x, z: boundary, w: 2, d: 0.22, room: r.id });
-      device(f, r.id, 'light', x - 2, boundary + (row ? 0.8 : -0.8));
-      if (r.name.includes('Chambre') && !r.name.includes('froide')) {
-        prop(f, r.id, 'bed', x - 2, z, 3.1, 4, { hide: true });
-        prop(f, r.id, 'wardrobe', x + 4, z - 2, 1.5, 2, { hide: true });
-        prop(f, r.id, 'desk', x + 3, z + 3, 2.6, 1.1);
-        prop(f, r.id, 'nightstand', x + 0.2, z - 1, 1, 1);
-        prop(f, r.id, 'rug', x, z + 1, 7, 5, { solid: false });
-      } else if (r.name === 'Salon') {
-        prop(f, r.id, 'sofa', x - 2, z, 3.8, 1.5, { hide: true });
-        prop(f, r.id, 'sofa', x + 3, z + 2, 1.5, 3);
-        prop(f, r.id, 'table', x, z + 1.4, 2, 1.3);
-        prop(f, r.id, 'tv', x, z - 3, 3, 0.8);
-        prop(f, r.id, 'rug', x, z + 1, 7, 5, { solid: false });
-        device(f, r.id, 'tv', x, z - 2.7);
-      } else if (r.name === 'Cuisine' || r.name === 'Salle à manger') {
-        prop(f, r.id, 'table', x, z, 4, 2.1);
-        for (const dx of [-1.3, 1.3])
-          for (const dz of [-1.8, 1.8]) prop(f, r.id, 'chair', x + dx, z + dz, 0.8, 0.8);
-        prop(f, r.id, 'counter', x, z - 3, 7, 1.1);
-        prop(f, r.id, 'fridge', x + 4.5, z - 3, 1.5, 1.5, { hide: true });
-        device(f, r.id, 'alarm', x - 4, z + 2.8);
-      } else if (r.name.includes('bains')) {
-        prop(f, r.id, 'bath', x - 2, z - 2, 3.8, 1.8);
-        prop(f, r.id, 'sink', x + 3, z - 3, 2, 1.1);
-        prop(f, r.id, 'wardrobe', x + 4, z + 1, 1.4, 2, { hide: true });
-        prop(f, r.id, 'rug', x, z, 4, 2, { solid: false });
-      } else if (r.name === 'Bureau') {
-        prop(f, r.id, 'desk', x, z, 3.6, 1.8);
-        prop(f, r.id, 'chair', x, z + 1.7, 0.8, 0.8);
-        prop(f, r.id, 'shelf', x - 3, z - 4, 4, 1, { hide: true });
-        prop(f, r.id, 'sofa', x + 3, z + 1, 1.5, 3, { hide: true });
-      } else if (r.name === 'Garage') {
-        prop(f, r.id, 'car', x - 1, z, 4, 6);
-        prop(f, r.id, 'shelf', x + 4, z - 3, 1.2, 3, { hide: true });
-        prop(f, r.id, 'boxes', x + 4, z + 2, 1.5, 1.5, { hide: true });
-        device(f, r.id, 'alarm', x - 4, z + 3);
-      } else {
-        prop(f, r.id, r.name === 'Buanderie' ? 'washer' : 'shelf', x - 3, z - 2, 3.8, 1.2, {
-          hide: true,
-        });
-        prop(f, r.id, 'shelf', x + 3, z - 2, 2.4, 1.2, { hide: true });
-        prop(f, r.id, 'boxes', x - 2, z + 2, 1.8, 1.6, { hide: true });
-        prop(f, r.id, 'table', x + 3, z + 2, 2, 1.3);
-        if (r.name === 'Local électrique') device(f, r.id, 'breaker', x + 4, z - 3);
-      }
-      prop(f, r.id, 'plant', x - 4.7, z + 3.5, 0.8, 0.8);
-      prop(f, r.id, 'lamp', x + 4.8, z + 3.6, 0.5, 0.5, { solid: false });
-      device(f, r.id, 'bottles', x - 4.5, z + 2.5);
-    }
-  stairs.push(
-    { id: `s${f}-up`, f, x: 16, z: 0, to: f < 2 ? f + 1 : null },
-    { id: `s${f}-down`, f, x: -16, z: 0, to: f > 0 ? f - 1 : null },
-  );
+prop(2, 'r2-1', 'sink', 3, -15.2, 3, 1.1);
+prop(2, 'r2-1', 'bath', 5.7, -11, 2, 1.4);
+prop(2, 'r2-1', 'toilet', 0.5, -11.2, 1.2, 1.8);
+prop(2, 'r2-5', 'sink', 19, 2.8, 3, 1.1);
+prop(2, 'r2-5', 'bath', 23.8, 5, 1.8, 3);
+prop(2, 'r2-5', 'toilet', 17, 7.5, 1.2, 1.8);
+prop(2, 'r2-6', 'shelf', 24, 12.5, 1.4, 5, { hide: true });
+prop(2, 'r2-6', 'washer', 17, 15, 4, 1.5);
+for (const r of rooms) {
+  const d = doors.find((d) => d.f === r.f && d.room === r.id && !d.exterior);
+  const n = d?.axis === 'z' ? { x: 1, z: 0 } : { x: 0, z: 1 };
+  let target = d ? { x: d.x + n.x * 0.85, z: d.z + n.z * 0.85 } : r.nav;
+  if (d && roomAt(r.f, target.x, target.z)?.id !== r.id)
+    target = { x: d.x - n.x * 0.85, z: d.z - n.z * 0.85 };
+  device(r.f, r.id, 'light', target.x, target.z);
 }
-// Garden furniture also participates in the authoritative collision map.
-prop(1, 'outside', 'sofa', -24, -6, 3, 1.2);
-prop(1, 'outside', 'table', -24, -9, 2, 1.3);
-prop(1, 'outside', 'plant', -20, 5, 1, 1);
-prop(1, 'outside', 'plant', -20, -5, 1, 1);
-prop(1, 'outside', 'boxes', 23, 8, 2, 1.8, { hide: true });
-device(1, 'outside', 'breaker', -18.8, 4);
-export function roomAt(f, x, z) {
-  return rooms.find(
-    (r) =>
-      r.f === f &&
-      Math.abs(x - r.x) < r.w / 2 &&
-      Math.abs(z - r.z) < r.d / 2 &&
-      (!r.cutout || !inside(x, z, r.cutout)),
-  );
-}
+device(1, 'r1-0', 'tv', -11, -14.3);
+device(1, 'r1-2', 'bottles', 20, -14);
+device(1, 'r1-1', 'bottles', -2.5, -6);
+device(1, 'r1-5', 'bottles', 23, 9);
+device(2, 'r2-6', 'bottles', 16, 13);
+device(1, 'outside', 'bottles', -18, -23);
+device(1, 'outside', 'breaker', 26.3, 12);
+prop(1, 'outside', 'pool', POOL.x, POOL.z, POOL.w, POOL.d, { occludes: false });
+prop(1, 'outside', 'counter', -18, -24.5, 5, 1.2);
+for (const [x, z] of [
+  [-12, -33],
+  [20, -33],
+  [0, -40],
+  [10, -40],
+])
+  prop(1, 'outside', 'lounger', x, z, 2, 4, { occludes: false });
+prop(1, 'outside', 'table', 16, -24, 2.5, 2);
+prop(1, 'outside', 'sofa', 20, -22, 4, 1.7, { hide: true });
+prop(1, 'outside', 'boxes', 32, 16, 2.5, 2, { hide: true });
+for (const [x, z] of [
+  [-29, -12],
+  [-29, 10],
+  [29, -18],
+  [29, 18],
+])
+  prop(1, 'outside', 'plant', x, z, 1.2, 1.2);
 export function distance(a, b) {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
@@ -322,6 +370,7 @@ export function inside(x, z, b, r = 0) {
   return Math.abs(x - b.x) < b.w / 2 + r && Math.abs(z - b.z) < b.d / 2 + r;
 }
 export function blocked(f, x, z, doorStates = {}, radius = 0.32, ignoreDoors = false) {
+  if (!FLOOR_IDS.includes(f)) return true;
   if (f === 1) {
     if (
       x < WORLD.minX + radius ||
@@ -330,7 +379,12 @@ export function blocked(f, x, z, doorStates = {}, radius = 0.32, ignoreDoors = f
       z > WORLD.maxZ - radius
     )
       return true;
-  } else if (x < -17.6 || x > 17.6 || z < -11.6 || z > 11.6) return true;
+  } else if (
+    !houseContains(f, x - radius, z - radius) ||
+    !houseContains(f, x + radius, z + radius) ||
+    inside(x, z, ATRIUM, radius)
+  )
+    return true;
   return (
     walls.some((w) => w.f === f && inside(x, z, w, radius)) ||
     props.some((p) => p.f === f && p.solid && inside(x, z, p, radius)) ||
@@ -340,18 +394,25 @@ export function blocked(f, x, z, doorStates = {}, radius = 0.32, ignoreDoors = f
     )
   );
 }
+export function roomFloorParts(r) {
+  return r.parts;
+}
+
 export function lineClear(f, a, b, doorStates = {}, ignoreFurniture = false, throughGlass = true) {
   const n = Math.ceil(distance(a, b) / 0.18);
   for (let i = 1; i < n; i++) {
     const x = a.x + ((b.x - a.x) * i) / n,
       z = a.z + ((b.z - a.z) * i) / n;
     if (
-      walls.some((w) => w.f === f && inside(x, z, w)) ||
+      walls.some((w) => w.f === f && !w.railing && inside(x, z, w)) ||
       doors.some(
         (d) => d.f === f && (d.window ? !throughGlass : !doorStates[d.id]) && inside(x, z, d),
       ) ||
       (!ignoreFurniture &&
-        props.some((p) => p.f === f && p.solid && p.type !== 'chair' && inside(x, z, p)))
+        props.some(
+          (p) =>
+            p.f === f && p.solid && p.type !== 'chair' && p.occludes !== false && inside(x, z, p),
+        ))
     )
       return false;
   }
@@ -378,7 +439,7 @@ export function pathfind(f, start, end, states = {}) {
     seen = new Map([[key(sx, sz), 0]]),
     parent = new Map();
   let found;
-  for (let count = 0; open.length && count < 5000; count++) {
+  for (let count = 0; open.length && count < 20000; count++) {
     let best = 0;
     for (let i = 1; i < open.length; i++)
       if (open[i].g + open[i].h < open[best].g + open[best].h) best = i;
@@ -428,11 +489,6 @@ export function pathfind(f, start, end, states = {}) {
   return result.reverse();
 }
 
-// Visibility is recomputed from the current region, never from explored history.
-export function regionAt(f, x, z) {
-  if (f === 1 && (Math.abs(x) > 18.02 || Math.abs(z) > 12.02)) return 'outside';
-  return roomAt(f, x, z)?.id || `hall${f}`;
-}
 export function visibleRegions(viewer, states = {}) {
   const current = regionAt(viewer.f, viewer.x, viewer.z),
     visible = new Set([current]);
@@ -469,7 +525,7 @@ export function canObserve(viewer, point, states = {}, regions = visibleRegions(
 }
 
 export function windowNormal(d) {
-  return d.axis === 'z' ? { x: Math.sign(d.x), z: 0 } : { x: 0, z: Math.sign(d.z) };
+  return d.normal || (d.axis === 'z' ? { x: Math.sign(d.x), z: 0 } : { x: 0, z: Math.sign(d.z) });
 }
 export function nearWindow(p, d, range = 1.85) {
   if (!d.window || p.f !== d.f || distance(p, d) > range) return false;
@@ -495,17 +551,6 @@ export function windowLanding(p, d, states = {}) {
   return null;
 }
 
-// Rectangular patches cover the exact L-shaped floor without filling its hallway recess.
-export function roomFloorParts(r) {
-  if (!r.cutout) return [r];
-  const c = r.cutout,
-    top = r.z < 0;
-  return [
-    { x: r.x, z: r.z + (top ? -c.d / 2 : c.d / 2), w: r.w, d: r.d - c.d },
-    { x: r.x + c.w / 2, z: c.z, w: r.w - c.w, d: c.d },
-  ];
-}
-
 // Access points face usable floor space rather than the wall behind the furniture.
 for (const h of hides) {
   const p = props.find((p) => p.id === h.prop);
@@ -515,9 +560,12 @@ for (const h of hides) {
     { x: p.x - p.w / 2 - 0.65, z: p.z },
     { x: p.x + p.w / 2 + 0.65, z: p.z },
   ];
-  const access = candidates.find(
+  const valid = candidates.filter(
     (a) => !blocked(h.f, a.x, a.z, {}, 0.35, true) && regionAt(h.f, a.x, a.z) === p.room,
   );
+  const access =
+    valid.find((a) => !doors.some((d) => d.window && d.f === h.f && distance(a, d) < 2)) ||
+    valid[0];
   if (access) Object.assign(h, access);
 }
 
@@ -539,3 +587,33 @@ export function bottleTrajectory(p, states = {}, charge = 0) {
   const range = Math.hypot(x - p.x, z - p.z);
   return { x, z, range, height: 1 + range * 0.12, duration: 0.35 + range * 0.045 };
 }
+
+export function hallFloorParts(f) {
+  const parts = [];
+  for (let z = HOUSE.minZ; z < HOUSE.maxZ; z++) {
+    let start = null;
+    for (let x = HOUSE.minX; x <= HOUSE.maxX; x++) {
+      const hall = x < HOUSE.maxX && regionAt(f, x + 0.5, z + 0.5) === `hall${f}`;
+      if (hall && start === null) start = x;
+      if (!hall && start !== null) {
+        const w = x - start,
+          cx = (start + x) / 2;
+        const previous = parts.find((p) => p.x === cx && p.w === w && p.z + p.d / 2 === z);
+        if (previous) {
+          previous.z += 0.5;
+          previous.d++;
+        } else parts.push({ x: cx, z: z + 0.5, w, d: 1 });
+        start = null;
+      }
+    }
+  }
+  return parts;
+}
+for (const w of walls)
+  w.railing =
+    w.f === 2 &&
+    (w.a === 'void' || w.b === 'void') &&
+    w.x > HOUSE.minX + 0.1 &&
+    w.x < HOUSE.maxX - 0.1 &&
+    w.z > HOUSE.minZ + 0.1 &&
+    w.z < HOUSE.maxZ - 0.1;

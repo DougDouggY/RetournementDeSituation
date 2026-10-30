@@ -45,16 +45,21 @@ try {
   assert.equal(await page.locator('#mode-label').textContent(), 'OBSERVATEUR');
   assert.ok(await page.evaluate(() => window.__RDS.observerLight > 0));
   assert.equal(await page.locator('.hud-bottom').isVisible(), false);
-  await page.locator('[data-floor="0"]').click();
-  await page.waitForFunction(
-    () => window.__RDS.observerFloor === 0 && window.__RDS.visibleRooms.includes('hall0'),
-  );
-  assert.equal(await page.evaluate(() => window.__RDS.visibleRooms.length), 7);
+  assert.equal(await page.locator('[data-floor="0"]').count(), 0, 'the basement must be removed');
   await page.locator('[data-floor="2"]').click();
   await page.waitForFunction(
     () => window.__RDS.observerFloor === 2 && window.__RDS.visibleRooms.includes('r2-5'),
   );
+  await page.locator('#observe-view').selectOption('follow');
+  await page.waitForFunction(
+    () =>
+      window.__RDS.observerZoom > 0.7 &&
+      window.__RDS.observerFloor === window.__RDS.state.players[0].f,
+  );
+  await page.locator('[data-floor="2"]').click();
+  assert.equal(await page.locator('#observe-view').inputValue(), 'house');
   await page.locator('[data-floor="1"]').click();
+  await page.locator('#observe-view').selectOption('full');
   await page.locator('#observe-speed').selectOption('4');
   await page.waitForFunction(() => window.__RDS.state.bodies.length > 0, null, { timeout: 60000 });
   await fs.mkdir('test-results', { recursive: true });
@@ -87,15 +92,19 @@ try {
     'PASS holding G previews trajectory, release consumes one bottle and impact creates noise',
   );
   await page.goto(base + '/plans.html');
-  await page.locator('#current img').waitFor();
-  assert.ok(
-    await page.locator('#current img').evaluate((img) => img.complete && img.naturalWidth > 1000),
+  await page.locator('#plan').waitFor();
+  assert.ok(await page.locator('#plan').evaluate((img) => img.complete && img.naturalWidth > 1000));
+  await page.locator('[data-map="niveau-2"]').click();
+  await page.waitForFunction(
+    () =>
+      document.querySelector('#plan').src.endsWith('niveau-2.svg') &&
+      document.querySelector('#plan').complete,
   );
-  await page.locator('[data-id="proposed"]').click();
-  assert.equal(await page.locator('#proposed').isVisible(), true);
-  assert.equal(await page.locator('#current').isVisible(), false);
-  assert.ok(
-    await page.locator('#proposed img').evaluate((img) => img.complete && img.naturalWidth > 1000),
+  await page.locator('[data-map="niveau-1"]').click();
+  await page.waitForFunction(
+    () =>
+      document.querySelector('#plan').src.endsWith('niveau-1.svg') &&
+      document.querySelector('#plan').complete,
   );
   assert.deepEqual(errors, []);
   await fs.writeFile(
@@ -107,19 +116,19 @@ try {
         checks: [
           'AI killer',
           'omniscient top view',
-          'three floor selectors',
+          'two floor selectors, no basement',
           'speed x4',
           'pause',
           'hold/release G trajectory',
           'impact sound',
-          'current/proposed floor plans',
+          'playable villa floor plans',
         ],
       },
       null,
       2,
     ),
   );
-  console.log('PASS current/proposed plan navigation; no JavaScript/WebGL errors');
+  console.log('PASS two-level villa plan navigation; no JavaScript/WebGL errors');
 } finally {
   await browser?.close();
   server.kill('SIGTERM');

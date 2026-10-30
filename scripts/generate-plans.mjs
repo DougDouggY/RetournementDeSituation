@@ -1,107 +1,119 @@
 import fs from 'node:fs/promises';
 import {
+  FLOOR_IDS,
+  FLOORS,
+  WORLD,
+  HOUSE,
+  POOL,
+  TERRACE,
+  ATRIUM,
   rooms,
   walls,
   doors,
   props,
   stairs,
   devices,
+  PARTY_SPOTS,
+  gardenLamps,
   roomFloorParts,
-  FLOORS,
+  hallFloorParts,
 } from '../shared/map.js';
 const esc = (s) => String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;');
-const head = (w, h, title) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${title}"><style>text{font-family:Arial,sans-serif;fill:#172d35}.title{font-size:28px;font-weight:bold}.sub{font-size:14px;fill:#52656b}.name{font-size:13px;font-weight:bold;text-anchor:middle}.small{font-size:11px;text-anchor:middle}</style><rect width="100%" height="100%" fill="#f4f1e9"/>`;
-let svg = head(1500, 690, 'Plan actuel : sous-sol, rez-de-chaussée et étage');
-svg +=
-  '<text x="35" y="43" class="title">MAISON ACTUELLE — 3 niveaux, dont un sous-sol</text><text x="35" y="70" class="sub">Plan extrait du jeu : murs, renfoncements, portes, fenêtres, meubles et escaliers réels. Maison : 36 × 24 m.</text>';
-for (let f = 0; f < 3; f++) {
-  const ox = 250 + f * 490,
-    oy = 365,
-    k = 11.3,
-    X = (x) => ox + x * k,
+function plan(f, ox, oy, k) {
+  const X = (x) => ox + x * k,
     Z = (z) => oy + z * k;
-  svg += `<text x="${ox}" y="113" class="name" style="font-size:22px">${FLOORS[f]}</text>`;
-  if (f === 1)
-    svg += `<rect x="${X(-21.5)}" y="${Z(-15.5)}" width="${43 * k}" height="${31 * k}" rx="15" fill="#d9e3cc"/><text x="${ox}" y="${Z(-14)}" class="small">JARDIN ACTUEL · pas de piscine</text>`;
-  svg += `<rect x="${X(-18)}" y="${Z(-12)}" width="${36 * k}" height="${24 * k}" fill="#d6cdb8"/>`;
-  for (const r of rooms.filter((r) => r.f === f)) {
-    for (const p of roomFloorParts(r))
-      svg += `<rect x="${X(p.x - p.w / 2)}" y="${Z(p.z - p.d / 2)}" width="${p.w * k}" height="${p.d * k}" fill="${f === 1 && r.name === 'Salon' ? '#ead69f' : '#ece5d6'}"/>`;
-    const words = r.name.split(' '),
-      txt = r.name.length > 18 ? [words.slice(0, -1).join(' '), words.at(-1)] : [r.name];
-    txt.forEach(
-      (t, i) =>
-        (svg += `<text x="${X(r.x)}" y="${Z(r.z) - 5 + i * 15}" class="name">${esc(t)}</text>`),
+  let svg = '';
+  const rect = (p, fill, stroke = 'none') =>
+    `<rect x="${X(p.x - p.w / 2)}" y="${Z(p.z - p.d / 2)}" width="${p.w * k}" height="${p.d * k}" fill="${fill}" stroke="${stroke}"/>`;
+  if (f === 1) {
+    svg += rect(
+      {
+        x: 0,
+        z: (WORLD.minZ + WORLD.maxZ) / 2,
+        w: WORLD.maxX - WORLD.minX,
+        d: WORLD.maxZ - WORLD.minZ,
+      },
+      '#dce5d0',
+      '#8caa8f',
     );
-    svg += `<text x="${X(r.x)}" y="${Z(r.z) + 27}" class="small">${r.w} × ${r.d} m${r.cutout ? ' · en L' : ''}</text>`;
+    svg += rect(TERRACE, '#d1bb90');
+    svg += rect(POOL, '#8cc6d2', '#508c9f');
+    svg += `<text x="${X(POOL.x)}" y="${Z(POOL.z)}" class="name">PISCINE · BASSIN INFRANCHISSABLE</text><text x="${X(-1)}" y="${Z(-26)}" class="name">TERRASSE · BAR · SOIRÉE</text>`;
+    for (const p of gardenLamps)
+      svg += `<circle cx="${X(p.x)}" cy="${Z(p.z)}" r="3.5" fill="#c99b31"/>`;
   }
-  for (const p of props.filter((p) => p.f === f && p.solid && p.room !== 'outside'))
-    svg += `<rect x="${X(p.x - p.w / 2)}" y="${Z(p.z - p.d / 2)}" width="${p.w * k}" height="${p.d * k}" fill="#8b8170" opacity=".38" rx="2"/>`;
+  for (const p of hallFloorParts(f)) svg += rect(p, '#d7cbb1');
+  if (f === 2) svg += rect(ATRIUM, '#b3ced0', '#77999f');
+  for (const r of rooms.filter((r) => r.f === f))
+    for (const p of roomFloorParts(r))
+      svg += rect(p, r.id === 'r1-0' || r.id === 'r1-1' ? '#ebd593' : '#eee5d3');
+  for (const p of props.filter((p) => p.f === f && p.solid && p.type !== 'pool'))
+    svg += rect(p, '#948b78');
   for (const w of walls.filter((w) => w.f === f))
-    svg += `<rect x="${X(w.x - w.w / 2)}" y="${Z(w.z - w.d / 2)}" width="${Math.max(2, w.w * k)}" height="${Math.max(2, w.d * k)}" fill="#233c43"/>`;
+    svg += `<rect x="${X(w.x - w.w / 2)}" y="${Z(w.z - w.d / 2)}" width="${Math.max(2, w.w * k)}" height="${Math.max(2, w.d * k)}" fill="${w.railing ? '#92a5a4' : '#2e4850'}"/>`;
   for (const d of doors.filter((d) => d.f === f))
-    svg += `<rect x="${X(d.x - d.w / 2)}" y="${Z(d.z - d.d / 2)}" width="${Math.max(4, d.w * k)}" height="${Math.max(4, d.d * k)}" fill="${d.window ? '#2c9bb1' : '#ce8b3d'}"/>`;
-  for (const st of stairs.filter((st) => st.f === f && st.to !== null))
-    svg += `<text x="${X(st.x)}" y="${Z(0) + 4}" class="name" style="fill:#9a4f28">${st.to > f ? '↑' : '↓'}</text>`;
-  svg += `<text x="${ox}" y="${Z(0) + 4}" class="small">COULOIR · 4 m</text>`;
-  for (const d of devices.filter((d) => d.f === f && d.type === 'breaker'))
-    svg += `<circle cx="${X(d.x)}" cy="${Z(d.z)}" r="5" fill="#bf4741"/>`;
+    svg += `<rect x="${X(d.x - d.w / 2)}" y="${Z(d.z - d.d / 2)}" width="${Math.max(4, d.w * k)}" height="${Math.max(4, d.d * k)}" fill="${d.window ? '#2692ac' : '#cd8439'}"/>`;
+  for (const r of rooms.filter((r) => r.f === f)) {
+    const p = r.parts[0],
+      max = Math.max(13, Math.floor((p.w * k) / 7));
+    const lines = [];
+    let line = '';
+    for (const word of r.name.split(' ')) {
+      if (line.length + word.length > max) {
+        lines.push(line);
+        line = word;
+      } else line += (line ? ' ' : '') + word;
+    }
+    if (line) lines.push(line);
+    lines.forEach(
+      (line, i) =>
+        (svg += `<text x="${X(p.x)}" y="${Z(p.z) - 12 + i * 15}" class="name outline">${esc(line)}</text>`),
+    );
+    svg += `<text x="${X(p.x)}" y="${Z(p.z) + lines.length * 15 + 3}" class="small outline">${Math.round(r.area)} m²</text>`;
+  }
+  for (const s of stairs.filter((s) => s.f === f))
+    svg += `<circle cx="${X(s.x)}" cy="${Z(s.z)}" r="12" fill="#8c668c"/><text x="${X(s.x)}" y="${Z(s.z) + 4}" class="name" style="fill:white">${s.id.startsWith('main') ? 'A' : 'B'}${s.to > s.f ? '↑' : '↓'}</text>`;
+  if (f === 1) {
+    for (const p of PARTY_SPOTS)
+      svg += `<circle cx="${X(p.x)}" cy="${Z(p.z)}" r="4.5" fill="#b44f42" stroke="white"/>`;
+    for (const d of devices.filter((d) => d.type === 'breaker'))
+      svg += `<circle cx="${X(d.x)}" cy="${Z(d.z)}" r="6" fill="#b83838"/><text x="${X(d.x) + 12}" y="${Z(d.z) + 4}" class="small" style="text-anchor:start">Coffret</text>`;
+    svg += `<text x="${X(0)}" y="${Z(19.8)}" class="small">ENTRÉE PRINCIPALE</text><text x="${X(-31)}" y="${Z(-5)}" class="small">DÉPART</text>`;
+  } else svg += `<text x="${X(ATRIUM.x)}" y="${Z(ATRIUM.z)}" class="small">VIDE SUR LE HALL</text>`;
+  return svg;
 }
-svg +=
-  '<text x="40" y="630" class="sub">Orange : portes · Bleu : fenêtres · Flèches : escaliers · Rouge : coffret électrique · Gris : meubles</text><text x="40" y="657" class="sub">Les dimensions indiquent l’enveloppe de chaque pièce ; les entrées en L réduisent sa surface. Le futur plan ci-dessous reste à discuter.</text></svg>';
-await fs.writeFile('public/plans/actuel.svg', svg);
-svg = head(
-  1450,
-  1000,
-  'Proposition : grande maison avec rez-de-chaussée, un étage, terrasse et piscine',
+function svg(body, w, h, title) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${title}"><style>text{font-family:Arial,sans-serif;fill:#1d3a43}.title{font-size:28px;font-weight:bold}.sub{font-size:15px;fill:#536a70}.name{font-size:12px;font-weight:bold;text-anchor:middle}.small{font-size:11px;text-anchor:middle}.outline{paint-order:stroke;stroke:#eee5d3;stroke-width:3;stroke-linejoin:round}</style><rect width="100%" height="100%" fill="#f5f1e7"/>${body}</svg>`;
+}
+let body =
+  '<text x="40" y="45" class="title">LA VILLA — NOUVELLE CARTE JOUABLE · RDC + UN ÉTAGE</text><text x="40" y="76" class="sub">Sans sous-sol · maison élargie à 50 × 32 m · plan extrait des collisions et des pièces réellement intégrées au jeu.</text>';
+body +=
+  '<text x="500" y="130" class="name" style="font-size:22px">REZ-DE-CHAUSSÉE + JARDIN</text><text x="1310" y="180" class="name" style="font-size:22px">ÉTAGE</text>';
+body += plan(1, 500, 550, 9) + plan(2, 1310, 420, 12);
+body +=
+  '<text x="980" y="700" class="sub">A : escalier principal · B : escalier de service</text><text x="980" y="733" class="sub">Les deux escaliers relient leurs propres paliers.</text><text x="980" y="778" class="sub">Points rouges : invités au départ (3 + 2 + 3).</text><text x="980" y="811" class="sub">Soirée : salon, salle à manger et terrasse.</text><text x="40" y="884" class="sub">Orange : portes et accès · Bleu : fenêtres escaladables au RDC · Gris : meubles · Jaune : lampes extérieures</text><text x="40" y="918" class="sub">Le bassin et le vide sur le hall bloquent les déplacements. Le jardin reste accessible autour de la maison.</text><text x="40" y="952" class="sub">Ce plan correspond à la version 0.6 du jeu. Les surfaces et les meubles ne sont plus ceux de l’ancienne maison à trois niveaux.</text>';
+await fs.mkdir('public/plans', { recursive: true });
+const complete = svg(
+  body,
+  1800,
+  980,
+  'La villa : RDC avec piscine, terrasse et jardin ; un étage, sans sous-sol',
 );
-svg +=
-  '<text x="35" y="43" class="title">PROPOSITION À DISCUTER — RDC + 1 étage, sans sous-sol</text><text x="35" y="70" class="sub">Esquisse de gameplay, pas encore la maison jouable. Volumes plus grands, pièces en L, deux escaliers et circulation en boucle.</text>';
-const rect = (x, y, w, h, name, color = '#e8dfca') =>
-  `<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="3" fill="${color}" stroke="#34474b" stroke-width="3"/><text x="${x + w / 2}" y="${y + h / 2 - 3}" class="name">${name}</text></g>`;
-svg +=
-  '<text x="355" y="115" class="name" style="font-size:22px">REZ-DE-CHAUSSÉE + JARDIN</text><text x="1100" y="115" class="name" style="font-size:22px">ÉTAGE</text>';
-svg += rect(40, 140, 650, 690, '', '#dce6ce');
-svg += rect(230, 165, 330, 110, 'PISCINE', '#91cbd4');
-svg += rect(110, 295, 520, 100, 'TERRASSE · BAR · INVITÉS', '#d8c49c');
-
-svg += rect(320, 420, 175, 140, 'SALLE À MANGER', '#ead087');
-svg += rect(495, 420, 155, 140, 'CUISINE · VERRES');
-svg += rect(80, 590, 170, 145, 'BUREAU / BIBLIOTHÈQUE');
-svg += rect(250, 590, 235, 145, 'HALL · ESCALIER PRINCIPAL', '#d6cdb8');
-svg += rect(485, 590, 165, 85, 'WC / VESTIAIRE');
-svg += rect(485, 675, 165, 125, 'GARAGE / BUANDERIE');
-svg += rect(250, 735, 235, 65, 'ENTRÉE / PORCHE');
-svg +=
-  '<path d="M320 560H495V590H485V650H250V590H320Z" fill="#d6cdb8" stroke="#34474b" stroke-width="3"/>';
-svg +=
-  '<path d="M80 420H320V560H390V635H250V590H80Z" fill="#ead087" stroke="#34474b" stroke-width="3"/><text x="200" y="500" class="name">GRAND SALON EN L · SOIRÉE</text>';
-svg +=
-  '<path d="M570 560V590M320 500H335M490 500H505M380 610H400M240 650H260M575 665V685M365 725V745M475 630H495M475 760H495" stroke="#ce8b3d" stroke-width="15"/>';
-svg += '<path d="M150 420H270M370 420H450M535 420H610" stroke="#2c9bb1" stroke-width="9"/>';
-svg += '<path d="M210 415V395M410 415V395" stroke="#ce8b3d" stroke-width="23"/>';
-svg +=
-  '<text x="575" y="578" class="small">↑ ESC. DE SERVICE</text><circle cx="665" cy="727" r="8" fill="#bf4741"/><text x="365" y="854" class="sub" text-anchor="middle">Façade élargie · ordre de grandeur : 50 × 32 m</text>';
-svg += rect(790, 190, 240, 180, 'SUITE PRINCIPALE');
-svg += rect(1055, 190, 110, 80, 'S. DE BAINS');
-svg += rect(1190, 190, 200, 180, 'CHAMBRE D’AMIS');
-svg += rect(790, 410, 200, 165, 'CHAMBRE / BUREAU');
-svg += rect(990, 410, 200, 165, 'CHAMBRE');
-svg += rect(1190, 410, 200, 100, 'SALLE DE BAINS / WC');
-svg += rect(1190, 510, 200, 65, 'LINGERIE');
-svg += rect(790, 370, 600, 40, 'PALIER · CIRCULATION EN BOUCLE', '#d6cdb8');
-svg +=
-  rect(1055, 295, 110, 75, 'VIDE SUR HALL', '#c7d9d9') +
-  rect(1030, 270, 160, 25, '', '#d6cdb8') +
-  rect(1030, 295, 25, 75, '', '#d6cdb8') +
-  rect(1165, 295, 25, 75, '', '#d6cdb8');
-svg +=
-  '<path d="M885 365V420M1080 405V420M1270 365V420M1110 260V280M1020 335H1040" stroke="#ce8b3d" stroke-width="15"/><text x="870" y="610" class="name">↑↓ Escalier principal</text><text x="1090" y="397" class="name">↑↓</text><text x="1280" y="610" class="name">↑↓ Escalier de service</text><text x="1330" y="397" class="name">↑↓</text>';
-svg +=
-  '<text x="790" y="680" class="sub">Intentions à choisir ensemble :</text><text x="790" y="712" class="sub">• Soirée répartie entre salon, terrasse et bar.</text><text x="790" y="744" class="sub">• Cuisine et toilettes : sorties occasionnelles, 1 ou 2 invités.</text><text x="790" y="776" class="sub">• Coffret dehors, près du garage : une réparation crée un détour.</text><text x="790" y="808" class="sub">• Deux escaliers : fuite possible sans impasse systématique.</text><text x="790" y="840" class="sub">• Fenêtres utilisables au RDC ; grandes baies vers la terrasse.</text><text x="40" y="920" class="sub">Orange : accès envisagés · Bleu : vitrages · Rouge : coffret. Les ouvertures, dimensions et meubles restent à ajuster.</text><text x="40" y="952" class="sub">Ce dessin sert à dire ce qu’on garde, déplace ou supprime. La piscine et ce nouveau plan ne sont pas encore intégrés au jeu.</text></svg>';
-await fs.writeFile('public/plans/proposition.svg', svg);
+await fs.writeFile('public/plans/actuel.svg', complete);
+await fs.writeFile('public/plans/proposition.svg', complete); // Keep the earlier shared URL useful.
+for (const f of FLOOR_IDS) {
+  const title = FLOORS[f];
+  await fs.writeFile(
+    `public/plans/niveau-${f}.svg`,
+    svg(
+      `<text x="30" y="42" class="title">${title.toUpperCase()} — LA VILLA</text>${plan(f, 500, 550, 11)}`,
+      1000,
+      950,
+      title,
+    ),
+  );
+}
 await fs.writeFile(
   'public/plans.html',
-  `<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><title>Plans de la maison — RDS</title><style>body{margin:0;background:#f4f1e9;color:#17343c;font:16px Arial;padding:24px}h1{margin:12px 0}nav{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}button,a{padding:12px;border-radius:8px;border:1px solid #879b99;color:inherit;background:white;cursor:pointer}button[aria-pressed=true]{background:#17343c;color:white}img{width:100%;height:auto;background:white}section[hidden]{display:none}p{max-width:1000px;line-height:1.6}</style><a href="/">← Retour au jeu</a><h1>Discutons du plan de la maison</h1><p>La maison actuelle comprend un <b>sous-sol, un rez-de-chaussée et un étage</b>. La proposition retire le sous-sol et agrandit les espaces, avec une terrasse, une piscine et une soirée entre intérieur et extérieur. Elle reste une esquisse à discuter.</p><nav><button aria-pressed="true" data-id="current">Plan actuel · 3 niveaux</button><button aria-pressed="false" data-id="proposed">Proposition · RDC + 1</button></nav><section id="current"><img src="/plans/actuel.svg" alt="Plan exact des trois niveaux actuels"><p><a href="/plans/actuel.svg" download>Télécharger le plan actuel</a></p></section><section id="proposed" hidden><img src="/plans/proposition.svg" alt="Proposition de grande maison à deux niveaux avec terrasse et piscine"><p><b>Pas encore jouable :</b> indique les pièces à conserver, déplacer ou supprimer, et les accès qui t’intéressent. <a href="/plans/proposition.svg" download>Télécharger la proposition</a></p></section><script>document.querySelectorAll('button').forEach(b=>b.onclick=()=>{document.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));document.querySelectorAll('section').forEach(s=>s.hidden=s.id!==(b.dataset.id==='current'?'current':'proposed'))})</script></html>`,
+  `<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><title>La villa — plan jouable</title><style>body{margin:0;padding:24px;background:#f5f1e7;color:#17343c;font:16px Arial}p{max-width:1100px;line-height:1.6}nav{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0}button,a{padding:11px;border:1px solid #81948c;border-radius:7px;color:inherit;background:white;cursor:pointer}button[aria-pressed=true]{background:#17343c;color:white}img{width:100%;height:auto}a{display:inline-block}</style><a href="/">← Retour au jeu</a><h1>La villa : le plan maintenant jouable</h1><p><b>Rez-de-chaussée + un étage, sans sous-sol.</b> Le grand salon, la salle à manger et la terrasse accueillent la soirée. Deux escaliers, des portes-fenêtres et le jardin offrent plusieurs itinéraires. La piscine et le vide sur le hall sont des obstacles réels.</p><nav><button data-map="actuel" aria-pressed="true">Vue d’ensemble</button><button data-map="niveau-1" aria-pressed="false">RDC + jardin</button><button data-map="niveau-2" aria-pressed="false">Étage</button></nav><a id="full" href="/plans/actuel.svg" target="_blank"><img id="plan" src="/plans/actuel.svg" alt="Plan exact de la nouvelle villa à deux niveaux"></a><p>Clique sur le dessin pour l’ouvrir en grand. <a href="/plans/actuel.png" download>Télécharger l’image</a></p><script>document.querySelectorAll('[data-map]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-map]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));const src='/plans/'+b.dataset.map+'.svg';document.querySelector('#plan').src=src;document.querySelector('#full').href=src;})</script></html>`,
 );
