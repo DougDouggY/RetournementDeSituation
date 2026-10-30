@@ -14,6 +14,8 @@ import {
   hallFloorParts,
   walls,
   doors,
+  AJAR_ANGLE,
+  lineClear,
   props,
   hides,
   devices,
@@ -166,12 +168,13 @@ function batchStatic(group, exclude = new Set()) {
 }
 function furniture(p) {
   const group = new THREE.Group(),
-    w = p.w,
-    d = p.d,
+    w = Math.abs(Math.sin(p.rotation || 0)) > 0.5 ? p.d : p.w,
+    d = Math.abs(Math.sin(p.rotation || 0)) > 0.5 ? p.w : p.d,
     wood = 0x73543e,
     dark = 0x282f31,
     cream = 0xb6ac91;
   group.position.set(p.x, 0, p.z);
+  group.rotation.y = p.rotation || 0;
   const b = (x, y, z, W, H, D, c, r) => box(group, x, y, z, W, H, D, c, r);
   const leg = (x, z, h = 0.8) => b(x, h / 2, z, 0.12, h, 0.12, 0x332f2a);
   switch (p.type) {
@@ -525,7 +528,8 @@ export class GameScene {
     this.throwLanding.renderOrder = 20;
     this.scene.add(this.throwLanding);
     this.target = new THREE.Vector3(-12, 0, -5);
-    this.scene.add(new THREE.HemisphereLight(0x748fa1, 0x080b10, 0.16));
+    this.ambientLight = new THREE.HemisphereLight(0x748fa1, 0x080b10, 0.16);
+    this.scene.add(this.ambientLight);
     const moon = new THREE.DirectionalLight(0x7596ac, 0.2);
     moon.position.set(-12, 28, -12);
     moon.castShadow = true;
@@ -642,6 +646,41 @@ export class GameScene {
       light.position.set(x, 2.5, z);
       exterior.add(light);
       this.gardenLights.push(light);
+    }
+    for (const x of [-21, -9, 9, 21]) {
+      box(exterior, x, 2.7, -16.3, 0.8, 0.35, 0.5, 0x29312e);
+      const lens = box(exterior, x, 2.65, -16.58, 0.65, 0.2, 0.08, 0xffddaa);
+      lens.material = new THREE.MeshStandardMaterial({ color: 0xffddaa, emissive: 0xffc477 });
+      this.fixtureMeshes.push({ mesh: lens, room: 'outside' });
+      const flood = new THREE.PointLight(0xffd6a2, 65, 13, 2);
+      flood.position.set(x, 2.5, -17);
+      flood.userData.poweredIntensity = 65;
+      exterior.add(flood);
+      this.gardenLights.push(flood);
+    }
+    box(exterior, -12, 0.6, -22, 0.9, 1.2, 0.6, 0x202924);
+    for (const y of [0.35, 0.85]) sphere(exterior, -12, y, -21.68, 0.2, 0x101714, 1, 1, 0.15);
+    for (const z of [-20, -26]) {
+      const points = [];
+      for (let i = 0; i <= 24; i++) {
+        const x = -23 + (i * 46) / 24,
+          y = 3.8 - 0.6 * Math.sin((Math.PI * i) / 24);
+        points.push(new THREE.Vector3(x, y, z));
+        const bulb = sphere(exterior, x, y - 0.12, z, 0.09, 0xffd99a);
+        bulb.material = new THREE.MeshStandardMaterial({
+          color: 0xffd99a,
+          emissive: 0xffbc60,
+          emissiveIntensity: 1,
+        });
+        this.fixtureMeshes.push({ mesh: bulb, room: 'outside' });
+      }
+      exterior.add(
+        new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints(points),
+          new THREE.LineBasicMaterial({ color: 0x34342b }),
+        ),
+      );
+      for (const x of [-23, 23]) cylinder(exterior, x, 1.9, z, 0.06, 0.06, 3.8, 0x34342b);
     }
     const porchLight = new THREE.PointLight(0xefbe7c, 14, 10, 2);
     porchLight.userData.poweredIntensity = 14;
@@ -958,8 +997,8 @@ export class GameScene {
       } else {
         const leaf = box(pivot, 1, 1, 0, 1.94, 2, 0.13, 0x6a5440);
         leaf.material = leaf.material.clone();
-        leaf.material.transparent = true;
-        leaf.material.opacity = 0.85;
+        leaf.material.transparent = false;
+        leaf.material.opacity = 1;
         box(pivot, 1.75, 1, 0.12, 0.12, 0.12, 0.14, 0xc2a166);
         for (const side of [-1, 1])
           box(
@@ -1201,6 +1240,9 @@ export class GameScene {
     if (observer && this.observerView === 'follow') this.observerFloor = me.f;
     const fps = !!me && this.firstPerson && !observer;
     const f = observer ? this.observerFloor : (me?.f ?? 1);
+    const indoors = fps && regionAt(f, me.x, me.z) !== 'outside';
+    this.ambientLight.intensity = indoors ? 0.015 : 0.16;
+    this.moon.intensity = indoors ? 0 : 0.2;
     this.visibleRooms = observer
       ? new Set([
           ...rooms.filter((r) => r.f === f).map((r) => r.id),
@@ -1314,7 +1356,9 @@ export class GameScene {
           const height = state.doors[id] ? 1.3 : 0;
           pivot.position.y += (height - pivot.position.y) * Math.min(1, dt * 7);
         } else {
-          const angle = (pivot.userData.baseAngle || 0) + (state.doors[id] ? Math.PI * 0.48 : 0);
+          const angle =
+            (pivot.userData.baseAngle || 0) +
+            (state.doors[id] === 'ajar' ? AJAR_ANGLE : state.doors[id] ? Math.PI * 0.48 : 0);
           pivot.rotation.y += (angle - pivot.rotation.y) * Math.min(1, dt * 9);
           if (pivot.userData.doublePivot) {
             const other = pivot.userData.doublePivot;
@@ -1460,7 +1504,7 @@ export class GameScene {
     for (let i = 0; i < this.windowLights.length; i++) {
       const light = this.windowLights[i],
         d = glowingWindows[i];
-      light.intensity = d ? 4 : 0;
+      light.intensity = d && (!fps || !indoors) ? 4 : 0;
       if (d) {
         const n = windowNormal(d);
         light.position.set(d.x + n.x * 0.7, 1.1, d.z + n.z * 0.7);
@@ -1478,12 +1522,22 @@ export class GameScene {
     for (let i = 0; i < this.sharedBeams.length; i++) {
       const light = this.sharedBeams[i],
         p = lightSources[i];
-      light.intensity = p ? (p.id.startsWith('g') ? 24 : 85) : 0;
+      light.intensity =
+        p && (!fps || p.id === myId || lineClear(f, me, p, state.doors, true))
+          ? p.id.startsWith('g')
+            ? 24
+            : 85
+          : 0;
       light.distance = 18;
       light.angle = 0.58;
       if (p) {
         light.position.set(p.x, 1.35, p.z);
-        light.target.position.set(p.x + Math.sin(p.angle) * 8, 0.2, p.z + Math.cos(p.angle) * 8);
+        const pitch = fps && p.id === myId ? this.lookPitch : -0.14;
+        light.target.position.set(
+          p.x + Math.sin(p.angle) * Math.cos(pitch) * 8,
+          1.35 + Math.sin(pitch) * 8,
+          p.z + Math.cos(p.angle) * Math.cos(pitch) * 8,
+        );
       }
     }
     this.throwAim.visible = this.throwLanding.visible = !!me?.charging && !observer;
@@ -1505,6 +1559,8 @@ export class GameScene {
         const region = light.userData.region;
         return (
           light.userData.floor === this.floor &&
+          (!fps ||
+            lineClear(f, me, { x: light.position.x, z: light.position.z }, state.doors, true)) &&
           (!me ||
             !region ||
             this.visibleRooms.has(region.startsWith('hall') ? `hall${this.floor}` : region))

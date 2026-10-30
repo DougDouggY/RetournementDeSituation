@@ -183,3 +183,13 @@ Les pièces reçoivent plusieurs appliques visibles sur leurs murs et leurs inte
 ## Version 0.8.1 — soirée plus vivante
 
 Les invités calmes alternent entre discussion, écoute, petite danse et verre à la main, avec des gestes distincts. Toutes les 9 à 19 secondes environ, ils peuvent se décaler de moins d’un mètre autour de leur place, sans quitter leur zone de fête ni traverser les meubles. Ces déplacements utilisent les collisions et les orientations de la simulation : leur champ de vision suit leur regard réel. Les sorties ordinaires vers les toilettes ou la cuisine restent limitées à une personne à la fois. Les nouvelles animations fonctionnent dans les deux vues et en observation.
+
+## Version 0.8.2 — ambiance nocturne et portes entrouvertes
+
+Les deux vues restent disponibles, avec bascule F2 pendant la même partie. En première personne, les lumières des autres pièces ne traversent plus les cloisons vers le joueur ; la lune et l’ambiance globale sont réduites à l’intérieur. Une pièce éteinte reste sombre, et la lampe suit aussi le regard vertical.
+
+Les voix des invités diminuent progressivement avec la distance, sont atténuées par les murs et portes opaques et ne passent pas d’un étage à l’autre. Les sous-titres suivent la même proximité. Les pas sont plus discrets, avec des volumes distincts pour marche, course et accroupissement. La terrasse possède une boucle musicale originale synthétisée localement, une enceinte, des projecteurs muraux et deux guirlandes ; le courant coupe la musique et les éclairages de fête. Le réglage Musique contrôle cette boucle.
+
+Les portes ordinaires sont opaques. **B** entrouvre la porte proche à 30° ou la referme ; **E** ouvre complètement une porte entrouverte. La fente et le panneau interviennent dans la vision et les collisions de la simulation, pour les deux vues ; une porte verrouillée reste verrouillée. Les fenêtres coulissantes et portes-fenêtres conservent leurs commandes. Les chaises, canapés, étagères, armoires et bureaux concernés sont orientés vers leur espace d’utilisation. L’interrupteur du bureau se trouve maintenant à côté du chambranle, sans prendre la priorité sur la porte.
+
+Le déploiement Cloudflare existant conserve ses commandes et `wrangler.jsonc`.

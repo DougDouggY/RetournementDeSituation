@@ -245,7 +245,7 @@ export class Simulation {
     }
   }
 
-  interact(id) {
+  interact(id, ajar = false) {
     const p = this.players.find((p) => p.id === id);
     if (!p || p.status !== 'free' || !['intro', 'playing', 'infiltration'].includes(this.phase))
       return;
@@ -275,7 +275,14 @@ export class Simulation {
         p.openProgress = 0;
         return;
       }
-      this.doorStates[obj.id] = !this.doorStates[obj.id];
+      this.doorStates[obj.id] =
+        ajar && !obj.window && !obj.patio
+          ? this.doorStates[obj.id] === 'ajar'
+            ? false
+            : 'ajar'
+          : this.doorStates[obj.id] === 'ajar'
+            ? true
+            : !this.doorStates[obj.id];
       this.event('door', this.doorStates[obj.id] ? 'Porte ouverte' : 'Porte fermée', {
         f: p.f,
         x: obj.x,
@@ -450,6 +457,7 @@ export class Simulation {
     if (type === 'attack') this.stab(p);
     if (type === 'drag') this.toggleDrag(p);
     if (type === 'interact') this.interact(id);
+    if (type === 'ajar') this.interact(id, true);
     if (type === 'torch' && p.status === 'free' && !p.hidden) {
       p.torch = !p.torch;
       this.event('switch', 'Clic.', { player: p.id });

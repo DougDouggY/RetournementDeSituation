@@ -55,8 +55,14 @@ try {
   const moved = await page.evaluate(() => window.__RDS.state.players[0]);
   assert.ok(moved.x > first.x + 2);
   assert.ok(Math.abs(moved.z - first.z) < 0.3);
+  await page.keyboard.press('KeyB');
+  await page.waitForFunction(() => window.__RDS.state.doors['entry-west'] === 'ajar');
+  await page.waitForFunction(
+    () => Math.abs(window.__RDS.doorLeaves['entry-west'].angle - Math.PI / 6) < 0.02,
+  );
+  assert.equal(await page.evaluate(() => window.__RDS.doorLeaves['entry-west'].opaque), true);
   await page.keyboard.press('KeyE');
-  await page.waitForFunction(() => window.__RDS.state.doors['entry-west']);
+  await page.waitForFunction(() => window.__RDS.state.doors['entry-west'] === true);
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() => !window.__RDS.state.doors['entry-west']);
   await page.keyboard.down('KeyD');
@@ -79,6 +85,9 @@ try {
   await page.keyboard.down('KeyW');
   await page.waitForFunction(() => window.__RDS.state.players[0].x > -11.5, null, { polling: 50 });
   await page.keyboard.up('KeyW');
+  await page.keyboard.down('KeyA');
+  await page.waitForFunction(() => window.__RDS.state.players[0].z < 6.6, null, { polling: 50 });
+  await page.keyboard.up('KeyA');
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() => window.__RDS.state.lights['r1-3'] === false);
   await page.waitForFunction(() =>
@@ -87,6 +96,9 @@ try {
   assert.ok(
     await page.evaluate(() => window.__RDS.fixtures.filter((f) => f.room === 'r1-3').length >= 2),
   );
+  assert.equal(await page.evaluate(() => window.__RDS.moonLight), 0);
+  assert.ok(await page.evaluate(() => window.__RDS.ambientLight < 0.02));
+  assert.ok(await page.evaluate(() => window.__RDS.renderedLights.every((v) => v === 0)));
   await page.screenshot({ path: 'test-results/first-person-lights-off.png' });
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() =>

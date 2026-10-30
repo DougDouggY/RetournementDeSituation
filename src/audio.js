@@ -1,3 +1,12 @@
+import { lineClear } from '../shared/map.js';
+
+export function proximityGain(source, listener, doors = {}, range = 14) {
+  if (source.f !== listener.f) return 0;
+  const distance = Math.hypot(source.x - listener.x, source.z - listener.z);
+  if (!Number.isFinite(distance) || distance >= range) return 0;
+  const gain = Math.pow(Math.max(0, 1 - distance / range), 2);
+  return gain * (lineClear(listener.f, listener, source, doors, true, false) ? 1 : 0.18);
+}
 // Original procedural sounds: no third-party recordings or licensed samples.
 export class Sound {
   constructor() {
@@ -7,6 +16,8 @@ export class Sound {
     this.spoken = new Map();
     this.lastStep = 0;
     this.lastPulse = 0;
+    this.musicBeat = 0;
+    this.lastMusic = 0;
   }
   start() {
     if (!this.ctx) {
@@ -67,8 +78,8 @@ export class Sound {
     gain.connect(this.ctx.destination);
     source.start();
   }
-  voice(text) {
-    if (!('speechSynthesis' in window) || this.volumes.voices < 0.01) return;
+  voice(text, gain = 1) {
+    if (!('speechSynthesis' in window) || this.volumes.voices * gain < 0.01) return;
     text = text.replaceAll('/', ' et ');
     const now = performance.now(),
       key = text.toLocaleLowerCase('fr');
@@ -79,7 +90,7 @@ export class Sound {
     u.lang = 'fr-FR';
     u.rate = 1.1;
     u.pitch = 0.8;
-    u.volume = this.volumes.voices;
+    u.volume = Math.min(1, this.volumes.voices * gain);
     const voice = speechSynthesis
       .getVoices()
       .find((v) => v.lang.startsWith('fr') && v.localService);
@@ -87,13 +98,39 @@ export class Sound {
     speechSynthesis.cancel();
     speechSynthesis.speak(u);
   }
+  musicNote(frequency, length, volume, type = 'sine') {
+    if (!this.ctx || volume <= 0 || this.volumes.music <= 0) return;
+    const t = this.ctx.currentTime,
+      osc = this.ctx.createOscillator(),
+      gain = this.ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = frequency;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(volume * this.volumes.music, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + length);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(t);
+    osc.stop(t + length);
+  }
   update(state, me) {
     if (!state || !me) return;
+    if (this.ambient)
+      this.ambient.gain.setTargetAtTime(
+        state.paused ? 0 : this.volumes.music * 0.025,
+        this.ctx.currentTime,
+        0.15,
+      );
+    if (state.paused) {
+      if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
+      return;
+    }
     for (const e of state.events) {
       if (e.id <= this.lastEvent) continue;
       this.lastEvent = e.id;
       if (e.f !== undefined && (e.f !== me.f || Math.hypot(e.x - me.x, e.z - me.z) > 20)) continue;
-      if (e.type === 'voice') this.voice(e.text.replace(/^.*? : /, ''));
+      if (e.type === 'voice')
+        this.voice(e.text.replace(/^.*? : /, ''), proximityGain(e, me, state.doors));
       if (e.type === 'intro') this.voice(e.text);
       if (e.type === 'kill') {
         this.noise(0.4, 0.4);
@@ -122,7 +159,20 @@ export class Sound {
       now - this.lastStep > (me.running ? 240 : me.crouching ? 650 : 400)
     ) {
       this.lastStep = now;
-      this.tone(me.f === 0 ? 95 : 140, 0.06, me.crouching ? 0.025 : 0.07, 'triangle', 40);
+      this.tone(110, 0.045, me.crouching ? 0.004 : me.running ? 0.022 : 0.012, 'triangle', 55);
+    }
+    // Original terrace loop, synthesized locally; no remote audio or samples.
+    const party =
+      state.power !== false && state.phase === 'infiltration'
+        ? proximityGain({ f: 1, x: -12, z: -22 }, me, state.doors, 38)
+        : 0;
+    if (now - this.lastMusic > 60000 / 110 / 2) {
+      this.lastMusic = now;
+      const melody = [220, 261.63, 329.63, 392, 329.63, 293.66, 261.63, 196];
+      this.musicNote(melody[this.musicBeat % melody.length], 0.24, party * 0.12, 'triangle');
+      if (this.musicBeat % 2 === 0)
+        this.musicNote(this.musicBeat % 8 < 4 ? 110 : 98, 0.4, party * 0.1);
+      this.musicBeat++;
     }
     const chase = state.guards.some(
       (g) => g.target === me.id && g.state === 'chase' && g.f === me.f,

@@ -284,24 +284,26 @@ function device(f, room, type, x, z) {
   devices.push({ id: `v${id++}`, f, room, type, x, z });
 }
 prop(1, 'r1-0', 'sofa', -17, -6.5, 6, 2, { hide: true });
-prop(1, 'r1-0', 'sofa', -8, -10, 2, 5, { hide: true });
+prop(1, 'r1-0', 'sofa', -8, -10, 2, 5, { hide: true, rotation: -Math.PI / 2 });
 prop(1, 'r1-0', 'table', -17, -10, 3, 1.5);
 prop(1, 'r1-0', 'tv', -11, -15.35, 4, 0.9);
-prop(1, 'r1-0', 'shelf', -7, 3.35, 4, 1, { hide: true });
+prop(1, 'r1-0', 'shelf', -7, 3.35, 4, 1, { hide: true, rotation: Math.PI });
 prop(1, 'r1-0', 'chair', 0, 1, 1.2, 1.2);
 prop(1, 'r1-0', 'rug', -17, -9, 9, 7, { solid: false });
 prop(1, 'r1-1', 'table', 3, -11, 7, 3);
-for (const x of [0, 6]) for (const z of [-13.3, -8.7]) prop(1, 'r1-1', 'chair', x, z, 1, 1);
-prop(1, 'r1-1', 'shelf', 10, -13, 1.5, 4, { hide: true });
+for (const x of [0, 6])
+  for (const z of [-13.3, -8.7])
+    prop(1, 'r1-1', 'chair', x, z, 1, 1, { rotation: z > -11 ? Math.PI : 0 });
+prop(1, 'r1-1', 'shelf', 10, -13, 1.5, 4, { hide: true, rotation: -Math.PI / 2 });
 prop(1, 'r1-2', 'counter', 18, -15.2, 7, 1.1);
-prop(1, 'r1-2', 'fridge', 23.9, -14, 1.7, 2.2, { hide: true });
+prop(1, 'r1-2', 'fridge', 23.9, -14, 1.7, 2.2, { hide: true, rotation: -Math.PI / 2 });
 prop(1, 'r1-2', 'table', 17, -10, 4, 2.4);
 prop(1, 'r1-2', 'sink', 24.2, -5.5, 1.1, 2);
 prop(1, 'r1-3', 'desk', -17, 5, 5, 2);
-prop(1, 'r1-3', 'chair', -17, 7, 1, 1);
-prop(1, 'r1-3', 'shelf', -24.25, 9.5, 1.2, 4, { hide: true });
-prop(1, 'r1-3', 'sofa', -14, 11, 5, 1.5, { hide: true });
-prop(1, 'r1-3', 'wardrobe', -11, 2, 1.5, 2, { hide: true });
+prop(1, 'r1-3', 'chair', -17, 7, 1, 1, { rotation: Math.PI });
+prop(1, 'r1-3', 'shelf', -24.25, 9.5, 1.2, 4, { hide: true, rotation: Math.PI / 2 });
+prop(1, 'r1-3', 'sofa', -14, 11, 5, 1.5, { hide: true, rotation: Math.PI });
+prop(1, 'r1-3', 'wardrobe', -11, 2, 1.5, 2, { hide: true, rotation: -Math.PI / 2 });
 prop(1, 'r1-4', 'sink', 17, 0.8, 3, 1.2);
 prop(1, 'r1-4', 'toilet', 23.8, 1.3, 1.2, 1.8);
 prop(1, 'r1-4', 'wardrobe', 24, 5, 1.5, 1.4, { hide: true });
@@ -317,8 +319,11 @@ for (const [rid, x, z, wx, wz, dx, dz] of [
   ['r2-4', 0, 10.65, 7.8, 13, -5, 15],
 ]) {
   prop(2, rid, 'bed', x, z, 4, 5, { hide: true });
-  prop(2, rid, 'wardrobe', wx, wz, 1.8, 4, { hide: true });
-  prop(2, rid, 'desk', dx, dz, 4, 1.3);
+  prop(2, rid, 'wardrobe', wx, wz, 1.8, 4, {
+    hide: true,
+    rotation: wx < 0 ? Math.PI / 2 : -Math.PI / 2,
+  });
+  prop(2, rid, 'desk', dx, dz, 4, 1.3, { rotation: dz > 0 ? Math.PI : 0 });
   prop(2, rid, 'rug', x, z + 1, 6, 5, { solid: false });
 }
 prop(2, 'r2-1', 'sink', 3, -15.2, 3, 1.1);
@@ -335,6 +340,16 @@ for (const r of rooms) {
   let target = d ? { x: d.x + n.x * 0.85, z: d.z + n.z * 0.85 } : r.nav;
   if (d && roomAt(r.f, target.x, target.z)?.id !== r.id)
     target = { x: d.x - n.x * 0.85, z: d.z - n.z * 0.85 };
+  if (d) {
+    const offset = (d.axis === 'z' ? d.d : d.w) / 2 + 0.65;
+    const options = [-1, 1].map((sign) => ({
+      x: target.x + (d.axis === 'x' ? sign * offset : 0),
+      z: target.z + (d.axis === 'z' ? sign * offset : 0),
+    }));
+    target =
+      options.find((p) => roomAt(r.f, p.x, p.z)?.id === r.id && !blocked(r.f, p.x, p.z, {}, 0.2)) ||
+      target;
+  }
   device(r.f, r.id, 'light', target.x, target.z);
 }
 device(1, 'r1-0', 'tv', -11, -14.3);
@@ -369,6 +384,46 @@ export function distance(a, b) {
 export function inside(x, z, b, r = 0) {
   return Math.abs(x - b.x) < b.w / 2 + r && Math.abs(z - b.z) < b.d / 2 + r;
 }
+// The ajar leaf uses the same hinge and angle as the renderer.
+export const AJAR_ANGLE = Math.PI / 6;
+export function doorLeafContains(d, x, z, radius = 0) {
+  const width = d.axis === 'z' ? d.d : d.w;
+  const angle = (d.axis === 'z' ? Math.PI / 2 : 0) + AJAR_ANGLE;
+  const dx = x - (d.axis === 'z' ? d.x : d.x - width / 2);
+  const dz = z - (d.axis === 'z' ? d.z + width / 2 : d.z);
+  const along = dx * Math.cos(angle) - dz * Math.sin(angle);
+  const across = dx * Math.sin(angle) + dz * Math.cos(angle);
+  return along > -radius && along < width + radius && Math.abs(across) < 0.065 + radius;
+}
+function ajarBlocksRay(d, a, b) {
+  const width = d.axis === 'z' ? d.d : d.w;
+  const angle = (d.axis === 'z' ? Math.PI / 2 : 0) + AJAR_ANGLE;
+  const local = (p) => {
+    const x = p.x - (d.axis === 'z' ? d.x : d.x - width / 2);
+    const z = p.z - (d.axis === 'z' ? d.z + width / 2 : d.z);
+    return [x * Math.cos(angle) - z * Math.sin(angle), x * Math.sin(angle) + z * Math.cos(angle)];
+  };
+  const start = local(a),
+    end = local(b);
+  let near = 0,
+    far = 1;
+  for (const [axis, min, max] of [
+    [0, 0, width],
+    [1, -0.065, 0.065],
+  ]) {
+    const delta = end[axis] - start[axis];
+    if (Math.abs(delta) < 1e-9) {
+      if (start[axis] < min || start[axis] > max) return false;
+    } else {
+      const t1 = (min - start[axis]) / delta,
+        t2 = (max - start[axis]) / delta;
+      near = Math.max(near, Math.min(t1, t2));
+      far = Math.min(far, Math.max(t1, t2));
+      if (near > far) return false;
+    }
+  }
+  return far > 0 && near < 1;
+}
 export function blocked(f, x, z, doorStates = {}, radius = 0.32, ignoreDoors = false) {
   if (!FLOOR_IDS.includes(f)) return true;
   if (f === 1) {
@@ -390,7 +445,13 @@ export function blocked(f, x, z, doorStates = {}, radius = 0.32, ignoreDoors = f
     props.some((p) => p.f === f && p.solid && inside(x, z, p, radius)) ||
     doors.some(
       (d) =>
-        d.f === f && (d.window || (!ignoreDoors && !doorStates[d.id])) && inside(x, z, d, radius),
+        d.f === f &&
+        (d.window
+          ? inside(x, z, d, radius)
+          : !ignoreDoors &&
+            (doorStates[d.id] === 'ajar'
+              ? doorLeafContains(d, x, z, radius)
+              : !doorStates[d.id] && inside(x, z, d, radius))),
     )
   );
 }
@@ -399,6 +460,12 @@ export function roomFloorParts(r) {
 }
 
 export function lineClear(f, a, b, doorStates = {}, ignoreFurniture = false, throughGlass = true) {
+  if (
+    doors.some(
+      (d) => d.f === f && !d.window && doorStates[d.id] === 'ajar' && ajarBlocksRay(d, a, b),
+    )
+  )
+    return false;
   const n = Math.ceil(distance(a, b) / 0.18);
   for (let i = 1; i < n; i++) {
     const x = a.x + ((b.x - a.x) * i) / n,
@@ -406,7 +473,13 @@ export function lineClear(f, a, b, doorStates = {}, ignoreFurniture = false, thr
     if (
       walls.some((w) => w.f === f && !w.railing && inside(x, z, w)) ||
       doors.some(
-        (d) => d.f === f && (d.window ? !throughGlass : !doorStates[d.id]) && inside(x, z, d),
+        (d) =>
+          d.f === f &&
+          (d.window
+            ? !throughGlass && inside(x, z, d)
+            : doorStates[d.id] === 'ajar'
+              ? false // Ajar leaves were intersected analytically above.
+              : !doorStates[d.id] && inside(x, z, d)),
       ) ||
       (!ignoreFurniture &&
         props.some(
@@ -535,7 +608,14 @@ export function visibleRegions(viewer, states = {}) {
     const normal = d.axis === 'z' ? { x: 1, z: 0 } : { x: 0, z: 1 };
     const a = regionAt(d.f, d.x + normal.x * 0.7, d.z + normal.z * 0.7),
       b = regionAt(d.f, d.x - normal.x * 0.7, d.z - normal.z * 0.7);
-    if ((a === current || b === current) && lineClear(viewer.f, viewer, d, states)) {
+    const portals = [-0.4, 0, 0.4].map((offset) => ({
+      x: d.x + (d.axis === 'x' ? d.w * offset : 0),
+      z: d.z + (d.axis === 'z' ? d.d * offset : 0),
+    }));
+    if (
+      (a === current || b === current) &&
+      portals.some((p) => lineClear(viewer.f, viewer, p, states))
+    ) {
       visible.add(a);
       visible.add(b);
     }

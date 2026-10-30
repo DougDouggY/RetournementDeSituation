@@ -82,6 +82,7 @@ export class Room {
       m.type === 'action' &&
       [
         'interact',
+        'ajar',
         'torch',
         'throw',
         'attack',

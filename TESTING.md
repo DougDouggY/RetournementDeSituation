@@ -128,3 +128,14 @@ Le parcours solo du dessus passe également (porte, fenêtre, escalade, bouteill
 Le nouveau contrôle de soirée calme suit les huit invités pendant 400 ticks : leurs petits déplacements restent dans leur zone initiale et à moins de 1,1 m de leur point de départ, ne traversent pas de mobilier, changent réellement la position de plusieurs invités, font varier les gestes et ne déclenchent aucune alerte. Les onze tests de soirée passent, dont le contrôle existant d’une seule sortie ordinaire à la fois. Les 75 tests précédents passent également. Le budget de lumières est inchangé ; les déplacements sociaux locaux ne lancent pas de recherche A*.
 
 La suite complète passe : 76 tests. Les parcours Chromium de première personne (mouvement relatif, souris capturée, porte, fenêtre/escalade, interrupteur et appliques, lampe, accroupissement, bouteille et F2) et d’observation (étages, zoom, suivi, vitesse, élimination autonome, pause et plans) passent sans erreur JavaScript/WebGL. Le build final reste solo et conserve les deux choix de caméra.
+
+## Version 0.8.2 — vérifications du 30 octobre 2026
+
+- Node.js 24.19.0, npm 11.9.0 ; installation reproductible par `npm ci`, serveur de développement vérifié par son endpoint de santé, sa page HTML et son module Vite.
+- `npm test` : **82 tests exécutés, 82 réussis**, aucun ignoré. Les six nouveaux contrôles couvrent l’atténuation des voix par distance/étage/porte, les états entrouvert/ouvert/fermé et les verrous, les collisions et rayons de vision sur le battant incliné, l’accès à l’interrupteur du bureau, les volumes de pas et la musique de terrasse selon courant/proximité/pause.
+- `npm run build` : compilation solo V0.8.2 réussie.
+- `node tests/solo-browser.mjs` : parcours Swonni en vue du dessus, pause, porte, bouteille, observation par fenêtre et escalade aller/retour réussis ; aucun appel API de jeu, WebSocket ou erreur JavaScript/WebGL.
+- `node tests/first-person-browser.mjs` : parcours clavier, B pour entrouvrir à 30°, opacité du battant, E pour ouvrir complètement, fenêtre, interrupteur déplacé, extinction effective des lumières rendues dans le bureau, torche, accroupissement, souris avec verrouillage du pointeur et F2 dans les deux sens réussis. Aucune erreur JavaScript/WebGL. Capture `test-results/first-person-lights-off.png` inspectée.
+- Contrôle navigateur de la terrasse : 50 ampoules, quatre projecteurs muraux et dix lumières ponctuelles de rendu au total ; aucun changement de budget. Capture `test-results/terrace-v082.png` inspectée.
+
+Les vérifications Chromium utilisent SwiftShader logiciel et ne mesurent pas la fluidité sur le GPU des joueurs. La synthèse vocale française reste dépendante des voix disponibles dans le navigateur ; ses règles de volume sont testées, sans validation subjective de la voix sur chaque système. Le pipeline Cloudflare distant n’est pas vérifié par ces contrôles locaux.
