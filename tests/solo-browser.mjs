@@ -57,6 +57,8 @@ try {
   assert.equal(state.phase, 'infiltration');
   assert.ok(state.players[0].x < -25);
   assert.deepEqual(await page.evaluate(() => window.__RDS.visibleRooms), ['outside']);
+  const lightCount = await page.evaluate(() => window.__RDS.activePointLights);
+  assert.equal(lightCount, 10);
   await page.screenshot({ path: 'test-results/villa-outside.png' });
   await page.locator('#hud-settings').click();
   await page.waitForFunction(() => window.__RDS.state.paused);
@@ -108,6 +110,11 @@ try {
   await page.keyboard.press('KeyV');
   await page.waitForFunction(
     () => window.__RDS.state.players[0].x < -25 && !window.__RDS.state.players[0].climb,
+  );
+  assert.equal(
+    await page.evaluate(() => window.__RDS.activePointLights),
+    lightCount,
+    'revealing rooms and crossing windows must keep the shader light count fixed',
   );
   await page.keyboard.up('KeyC');
   assert.deepEqual(apiRequests, []);

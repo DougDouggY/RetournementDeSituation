@@ -55,6 +55,7 @@ export class Simulation {
     this.remaining = duration;
     this.players = [];
     this.guards = [];
+    this.doorLocks = {};
     this.doorStates = Object.fromEntries(doors.map((d) => [d.id, false]));
     this.lightStates = Object.fromEntries(rooms.map((r) => [r.id, true]));
     this.noises = [];
@@ -124,6 +125,7 @@ export class Simulation {
     this.events = [];
     this.visits = {};
     this.thrown = [];
+    this.doorLocks = {};
     this.doorStates = Object.fromEntries(doors.map((d) => [d.id, false]));
     this.lightStates = Object.fromEntries(rooms.map((r) => [r.id, true]));
     this.players.forEach((p, i) =>
@@ -142,6 +144,7 @@ export class Simulation {
         opening: null,
         openProgress: 0,
         attackCooldown: 0,
+        exhaustedUntil: 0,
         f: 1,
         hp: 3,
         status: 'free',
@@ -256,6 +259,12 @@ export class Simulation {
     p.interactUntil = this.time + 0.55;
     if (kind === 'rescue') return;
     if (kind === 'door') {
+      if (this.doorLocks[obj.id]) {
+        this.event('warning', 'Porte verrouillée · L pour déverrouiller depuis l’intérieur.', {
+          player: p.id,
+        });
+        return;
+      }
       if (obj.window && this.players.some((other) => other.climb?.window === obj.id)) return;
       if (obj.window && !this.doorStates[obj.id]) {
         p.opening = obj.id;
@@ -432,6 +441,7 @@ export class Simulation {
       p.throwCharge = 0;
       return;
     }
+    if (type === 'lock') this.toggleLock(p);
     if (type === 'climb') this.climbWindow(p);
     if (p.climb && type !== 'torch') return;
     if (type === 'attack') this.stab(p);
@@ -442,6 +452,36 @@ export class Simulation {
       this.event('switch', 'Clic.', { player: p.id });
     }
     if (type === 'throw') this.throwBottle(p);
+  }
+  toggleLock(p) {
+    if (p.status !== 'free' || p.hidden || p.climb || p.dragging) return;
+    const region = regionAt(p.f, p.x, p.z);
+    if (!rooms.some((r) => r.id === region)) return;
+    const d = doors
+      .filter(
+        (d) =>
+          !d.window &&
+          d.f === p.f &&
+          distance(p, d) < 1.9 &&
+          [
+            regionAt(d.f, d.x + (d.axis === 'z' ? 0.7 : 0), d.z + (d.axis === 'x' ? 0.7 : 0)),
+            regionAt(d.f, d.x - (d.axis === 'z' ? 0.7 : 0), d.z - (d.axis === 'x' ? 0.7 : 0)),
+          ].includes(region),
+      )
+      .sort((a, b) => distance(p, a) - distance(p, b))[0];
+    if (!d) return;
+    const lock = this.doorLocks[d.id];
+    if (lock && lock.region !== region) return;
+    if (lock) delete this.doorLocks[d.id];
+    else {
+      this.doorStates[d.id] = false;
+      this.doorLocks[d.id] = { region, at: this.time, player: p.id };
+    }
+    this.event(
+      'door',
+      lock ? 'Porte déverrouillée.' : 'Porte verrouillée. Ne restez pas enfermé trop longtemps.',
+      { player: p.id },
+    );
   }
   throwBottle(p) {
     if (p.status !== 'free' || p.hidden || p.climb || p.dragging || p.bottles <= 0) {
@@ -552,7 +592,13 @@ export class Simulation {
     );
   }
   stab(p) {
-    if (p.status !== 'free' || p.hidden || p.dragging || p.attackCooldown > 0) return;
+    if (p.status !== 'free' || p.hidden || p.dragging || p.attackCooldown > 0 || p.climb) return;
+    if (p.stamina < 40) {
+      this.event('warning', 'Pas assez d’énergie pour attaquer (40 nécessaires).', {
+        player: p.id,
+      });
+      return;
+    }
     const target = this.guards
       .filter(
         (g) =>
@@ -572,7 +618,9 @@ export class Simulation {
     target.state = 'dead';
     target.armed = false;
     target.target = null;
-    p.attackCooldown = 1.2;
+    p.stamina -= 40;
+    p.exhaustedUntil = this.time + 5;
+    p.attackCooldown = 3;
     p.attackUntil = this.time + 0.6;
     const body = {
       id: `body-${target.id}`,
@@ -1275,7 +1323,8 @@ export class Simulation {
     const next = g.path[0];
     if (!next) return;
     for (const d of doors)
-      if (!d.window && d.f === g.f && distance(g, d) < 1.6) this.doorStates[d.id] = true;
+      if (!d.window && d.f === g.f && distance(g, d) < 1.6 && !this.doorLocks[d.id])
+        this.doorStates[d.id] = true;
     const dx = next.x - g.x,
       dz = next.z - g.z,
       d = Math.hypot(dx, dz);
@@ -1287,6 +1336,34 @@ export class Simulation {
     this.move(g, (dx / d) * Math.min(speed * dt, d), (dz / d) * Math.min(speed * dt, d));
   }
   tick(dt) {
+    if (!['intro', 'playing', 'infiltration'].includes(this.phase)) return;
+    for (const [id, lock] of Object.entries(this.doorLocks)) {
+      const age = this.time - lock.at;
+      const d = doors.find((d) => d.id === id);
+      if (age > 25 && !lock.questioned) {
+        lock.questioned = true;
+        this.noise(
+          d.f,
+          d.x,
+          d.z,
+          12,
+          'Cette porte reste fermée… Quelqu’un va vérifier.',
+          lock.player,
+        );
+      }
+      if (age > 45) {
+        delete this.doorLocks[id];
+        this.noise(
+          d.f,
+          d.x,
+          d.z,
+          16,
+          'La serrure cède : impossible de rester barricadé.',
+          lock.player,
+        );
+      }
+    }
+
     if (!['intro', 'playing', 'infiltration'].includes(this.phase)) return;
     dt = clamp(dt, 0, 0.1);
     this.time += dt;
@@ -1356,7 +1433,8 @@ export class Simulation {
             p.opening = null;
             p.openProgress = 0;
             p.interactUntil = this.time + 0.7;
-            this.event('door', 'Fenêtre déverrouillée sans bruit.', { player: p.id });
+            this.noise(p.f, d.x, d.z, 5, 'Un léger grincement de fenêtre.', p.id);
+            this.event('door', 'Fenêtre ouverte.', { player: p.id });
           }
         }
       }
@@ -1364,7 +1442,11 @@ export class Simulation {
       p.running = running;
       p.crouching = !!inp.crouch;
       p.moving = moving;
-      p.stamina = clamp(p.stamina + (running ? -24 : 14) * dt, 0, 100);
+      p.stamina = clamp(
+        p.stamina + (running ? -24 : this.time < (p.exhaustedUntil || 0) ? 0 : 10) * dt,
+        0,
+        100,
+      );
       if (moving) {
         const speed = p.dragging ? 1.25 : inp.crouch ? 1.45 : running ? 4.7 : 2.7;
         this.move(
@@ -1457,6 +1539,7 @@ export class Simulation {
       players: this.players.map(({ input, ...p }) => ({ ...p, input: { crouch: !!input.crouch } })),
       guards: this.guards.map(({ path, pathEnd, goal, ...g }) => g),
       doors: this.doorStates,
+      doorLocks: this.doorLocks,
       lights: this.lightStates,
       noises: this.noises,
       events: this.events,

@@ -621,7 +621,7 @@ export class GameScene {
       [5, -39],
     ]) {
       const light = new THREE.PointLight(0xffd095, 18, 16, 2);
-      light.userData.poweredIntensity = 18;
+      light.userData.poweredIntensity = z < -16 ? 85 : 38;
       light.position.set(x, 2.5, z);
       exterior.add(light);
       this.gardenLights.push(light);
@@ -673,6 +673,43 @@ export class GameScene {
       a.root.rotation.y = 0.4;
       this.floors[1].add(a.root);
     });
+    // Keep a fixed light budget: revealing rooms must never change shader light counts.
+    this.localLightSources = [...this.lightMeshes.values(), ...this.gardenLights];
+    for (const light of this.localLightSources) {
+      light.userData.region =
+        [...this.lightMeshes].find(([, l]) => l === light)?.[0].split(':')[0] || 'outside';
+      light.userData.floor =
+        light.parent === this.exterior
+          ? 1
+          : FLOOR_IDS.find((f) => {
+              let parent = light.parent;
+              while (parent) {
+                if (parent === this.floors[f]) return true;
+                parent = parent.parent;
+              }
+              return false;
+            });
+      light.removeFromParent();
+    }
+    this.localLights = Array.from({ length: 8 }, () => {
+      const light = new THREE.PointLight(0xffffff, 0);
+      this.scene.add(light);
+      return light;
+    });
+    this.observerZoomFactor = 1;
+    this.container.addEventListener(
+      'wheel',
+      (e) => {
+        if (!this.lastState?.observer) return;
+        e.preventDefault();
+        this.observerZoomFactor = THREE.MathUtils.clamp(
+          this.observerZoomFactor * Math.exp(-e.deltaY * 0.0015),
+          0.7,
+          3,
+        );
+      },
+      { passive: false },
+    );
     this.resize();
     window.addEventListener('resize', () => this.resize());
   }
@@ -1083,7 +1120,7 @@ export class GameScene {
     this.camera.position
       .copy(this.target)
       .add(observer ? new THREE.Vector3(0, 45, 0.01) : new THREE.Vector3(0, 27, 17));
-    const zoom = observer
+    const baseZoom = observer
       ? this.observerView === 'follow'
         ? 0.8
         : f === 2
@@ -1092,6 +1129,7 @@ export class GameScene {
             ? 0.42
             : 0.27
       : 1;
+    const zoom = baseZoom * (observer ? this.observerZoomFactor : 1);
     if (this.camera.zoom !== zoom) {
       this.camera.zoom = zoom;
       this.camera.updateProjectionMatrix();
@@ -1147,7 +1185,11 @@ export class GameScene {
       }
       for (const [id, light] of this.lightMeshes)
         light.intensity =
-          state.power !== false && state.lights[light.userData.roomId || id] !== false ? 38 : 0;
+          state.power !== false && state.lights[light.userData.roomId || id] !== false
+            ? light.userData.roomId === 'r1-0'
+              ? 110
+              : 65
+            : 0;
       for (const noise of state.noises.filter(
         (n) => n.f === this.floor && (!me || canObserve(me, n, state.doors, this.visibleRooms)),
       )) {
@@ -1296,7 +1338,9 @@ export class GameScene {
     for (let i = 0; i < this.sharedBeams.length; i++) {
       const light = this.sharedBeams[i],
         p = lightSources[i];
-      light.intensity = p ? 16 : 0;
+      light.intensity = p ? (p.id.startsWith('g') ? 24 : 85) : 0;
+      light.distance = 18;
+      light.angle = 0.58;
       if (p) {
         light.position.set(p.x, 1.35, p.z);
         light.target.position.set(p.x + Math.sin(p.angle) * 8, 0.2, p.z + Math.cos(p.angle) * 8);
@@ -1315,6 +1359,31 @@ export class GameScene {
       });
       this.throwAim.geometry.setFromPoints(points);
       this.throwLanding.position.set(trajectory.x, 0.12, trajectory.z);
+    }
+    const candidates = this.localLightSources
+      .filter((light) => {
+        const region = light.userData.region;
+        return (
+          light.userData.floor === this.floor &&
+          (!me ||
+            !region ||
+            this.visibleRooms.has(region.startsWith('hall') ? `hall${this.floor}` : region))
+        );
+      })
+      .sort(
+        (a, b) =>
+          a.position.distanceToSquared(this.target) - b.position.distanceToSquared(this.target),
+      );
+    for (let i = 0; i < this.localLights.length; i++) {
+      const light = this.localLights[i],
+        source = candidates[i];
+      light.intensity = source ? source.intensity : 0;
+      if (source) {
+        light.position.copy(source.position);
+        light.color.copy(source.color);
+        light.distance = source.distance;
+        light.decay = source.decay;
+      }
     }
     this.renderer.render(this.scene, this.camera);
   }

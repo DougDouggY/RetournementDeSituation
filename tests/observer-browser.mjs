@@ -60,6 +60,12 @@ try {
   assert.equal(await page.locator('#observe-view').inputValue(), 'house');
   await page.locator('[data-floor="1"]').click();
   await page.locator('#observe-view').selectOption('full');
+  await page.waitForFunction(() => Math.abs(window.__RDS.observerZoom - 0.27) < 0.001);
+  const beforeZoom = await page.evaluate(() => window.__RDS.observerZoom);
+  await page.mouse.move(400, 300);
+  await page.mouse.wheel(0, -350);
+  await page.waitForFunction((before) => window.__RDS.observerZoom > before * 1.3, beforeZoom);
+  await page.mouse.wheel(0, 350);
   await page.locator('#observe-speed').selectOption('4');
   await page.waitForFunction(() => window.__RDS.state.bodies.length > 0, null, { timeout: 60000 });
   await fs.mkdir('test-results', { recursive: true });

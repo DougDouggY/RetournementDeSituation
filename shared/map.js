@@ -68,8 +68,8 @@ export const PARTY_SPOTS = [
   { f: 1, x: -20, z: -10 },
   { f: 1, x: -17, z: -4 },
   { f: 1, x: -14, z: -13 },
-  { f: 1, x: 2, z: -6.5 },
-  { f: 1, x: 7, z: -6.5 },
+  { f: 1, x: -8, z: -5 },
+  { f: 1, x: -10, z: -10 },
   { f: 1, x: -14, z: -22 },
   { f: 1, x: -10, z: -22 },
   { f: 1, x: -6, z: -22 },
@@ -419,6 +419,12 @@ export function lineClear(f, a, b, doorStates = {}, ignoreFurniture = false, thr
   return true;
 }
 // A* on a half-meter grid. Doors are traversable in planning; actors open them on approach.
+const navigationCells = new Map();
+function navigationBlocked(f, x, z) {
+  const key = `${f}:${x}:${z}`;
+  if (!navigationCells.has(key)) navigationCells.set(key, blocked(f, x / 2, z / 2, {}, 0.35, true));
+  return navigationCells.get(key);
+}
 export function pathfind(f, start, end, states = {}) {
   const scale = 2,
     key = (x, z) => `${x},${z}`;
@@ -428,8 +434,7 @@ export function pathfind(f, start, end, states = {}) {
     for (let r = 0; r < 10; r++)
       for (let dx = -r; dx <= r; dx++)
         for (let dz = -r; dz <= r; dz++)
-          if (!blocked(f, (bx + dx) / scale, (bz + dz) / scale, states, 0.35, true))
-            return [bx + dx, bz + dz];
+          if (!navigationBlocked(f, bx + dx, bz + dz)) return [bx + dx, bz + dz];
     return [bx, bz];
   }
   const [sx, sz] = nearest(start),
@@ -438,13 +443,39 @@ export function pathfind(f, start, end, states = {}) {
   const open = [{ x: sx, z: sz, g: 0, h: 0 }],
     seen = new Map([[key(sx, sz), 0]]),
     parent = new Map();
+  const score = (node) => node.g + node.h;
+  function push(node) {
+    let i = open.length;
+    open.push(node);
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (score(open[parent]) <= score(node)) break;
+      open[i] = open[parent];
+      i = parent;
+    }
+    open[i] = node;
+  }
+  function pop() {
+    const first = open[0],
+      last = open.pop();
+    if (open.length) {
+      let i = 0;
+      while (i * 2 + 1 < open.length) {
+        let child = i * 2 + 1;
+        if (child + 1 < open.length && score(open[child + 1]) < score(open[child])) child++;
+        if (score(last) <= score(open[child])) break;
+        open[i] = open[child];
+        i = child;
+      }
+      open[i] = last;
+    }
+    return first;
+  }
   let found;
   for (let count = 0; open.length && count < 20000; count++) {
-    let best = 0;
-    for (let i = 1; i < open.length; i++)
-      if (open[i].g + open[i].h < open[best].g + open[best].h) best = i;
-    const cur = open.splice(best, 1)[0],
+    const cur = pop(),
       ck = key(cur.x, cur.z);
+    if (cur.g !== seen.get(ck)) continue;
     if (ck === target) {
       found = cur;
       break;
@@ -464,17 +495,12 @@ export function pathfind(f, start, end, states = {}) {
         nk = key(nx, nz),
         ng = cur.g + Math.hypot(dx, dz);
       if (seen.has(nk) && seen.get(nk) <= ng) continue;
-      if (blocked(f, nx / scale, nz / scale, states, 0.35, true)) continue;
-      if (
-        dx &&
-        dz &&
-        (blocked(f, cur.x / scale, nz / scale, states, 0.35, true) ||
-          blocked(f, nx / scale, cur.z / scale, states, 0.35, true))
-      )
+      if (navigationBlocked(f, nx, nz)) continue;
+      if (dx && dz && (navigationBlocked(f, cur.x, nz) || navigationBlocked(f, nx, cur.z)))
         continue;
       seen.set(nk, ng);
       parent.set(nk, ck);
-      open.push({ x: nx, z: nz, g: ng, h: Math.hypot(ex - nx, ez - nz) });
+      push({ x: nx, z: nz, g: ng, h: Math.hypot(ex - nx, ez - nz) });
     }
   }
   if (!found) return [];

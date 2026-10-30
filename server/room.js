@@ -80,9 +80,17 @@ export class Room {
     if (m.type === 'input') this.sim.setInput(member.id, m);
     if (
       m.type === 'action' &&
-      ['interact', 'torch', 'throw', 'attack', 'drag', 'climb', 'charge', 'cancelThrow'].includes(
-        m.action,
-      )
+      [
+        'interact',
+        'torch',
+        'throw',
+        'attack',
+        'drag',
+        'climb',
+        'charge',
+        'cancelThrow',
+        'lock',
+      ].includes(m.action)
     )
       this.sim.action(member.id, m.action);
     if (m.type === 'character' && this.sim.phase === 'lobby' && [0, 1].includes(m.character)) {

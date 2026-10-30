@@ -29,7 +29,6 @@ test('undisturbed guests spend the opening at the party, with only one ordinary 
   assert.deepEqual([...new Set(s.guards.map((g) => regionAt(g.f, g.x, g.z)))].sort(), [
     'outside',
     'r1-0',
-    'r1-1',
   ]);
   advance(s, 20);
   assert.ok(s.guards.every((g) => g.state === 'party' && !g.armed));

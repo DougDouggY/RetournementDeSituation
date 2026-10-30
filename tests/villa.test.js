@@ -99,13 +99,13 @@ test('new doors have matching wall openings, and every usable window has clear l
   assert.equal(doors.filter((d) => d.patio).length, 2);
 });
 
-test('the party starts in three areas, with eight clear positions, refill points and a reachable outside breaker', () => {
+test('the party starts in the salon and terrace, with eight clear positions, refill points and a reachable outside breaker', () => {
   const s = new Simulation();
   s.addPlayer('p');
   s.start(true);
   const counts = Object.groupBy(s.guards, (g) => regionAt(g.f, g.x, g.z));
-  assert.equal(counts['r1-0'].length, 3);
-  assert.equal(counts['r1-1'].length, 2);
+  assert.equal(counts['r1-0'].length, 5);
+  assert.equal(counts['r1-1'], undefined);
   assert.equal(counts.outside.length, 3);
   for (const p of PARTY_SPOTS) assert.equal(blocked(p.f, p.x, p.z), false);
   assert.equal(regionAt(SPAWN.f, SPAWN.x, SPAWN.z), 'outside');
