@@ -1057,3 +1057,40 @@ dialog p {
   background: #d5b77e;
   color: #14292b;
 }
+
+.view-toggle {
+  position: fixed;
+  right: 28px;
+  top: 90px;
+  z-index: 8;
+  pointer-events: auto;
+  background: #102b2de8;
+  padding: 9px;
+  color: #f0e6ce;
+  border: 1px solid #a7c1aa;
+}
+#fps-reticle {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 24px;
+  color: #fff8db;
+  text-shadow: 0 1px 3px #000;
+  pointer-events: none;
+}
+#fps-look {
+  position: fixed;
+  left: 50%;
+  top: 58%;
+  transform: translateX(-50%);
+  padding: 12px;
+  pointer-events: auto;
+  z-index: 9;
+  background: #102b2de8;
+  color: #f0e6ce;
+  border: 1px solid #a7c1aa;
+}
+#solo-fps {
+  margin-top: 8px;
+}

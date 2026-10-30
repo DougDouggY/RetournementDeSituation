@@ -114,3 +114,11 @@ Le parcours Chromium solo passe : porte ouest, fenêtre fermée observée, ouver
 Sur une série locale de quinze recherches identiques autour du bassin : ancienne navigation 140 ms, nouvelle 38 ms, avec 900 points de chemin dans chaque cas. Ce contrôle illustre le gain de la grille de collisions mémorisée et de la file de priorité ; il ne constitue pas une mesure des FPS sur la machine du joueur. Le correctif graphique stabilise le nombre de lumières pour éviter les variantes de shaders déclenchées par la révélation des pièces. Les essais locaux ne garantissent pas l’absence de tout ralentissement sur tous les GPU.
 
 La régression coopérative V0.7 passe également : deux clients réels, choix distinct des personnages, porte, déplacement, lampe et bouteille synchronisés, reconnexion sans doublon et fin commune d’une manche accélérée. Le build final a été remis en mode solo pour la publication existante.
+
+## V0.8 — première personne et appliques
+
+Les 75 tests de logique passent, dont un nouveau contrôle du son : remplacement des barres obliques dans les noms de pièces, suppression des répétitions et absence d’interruption d’une phrase en cours. La simulation des mécaniques reste partagée entre les deux caméras.
+
+Le nouveau parcours Chromium de production passe : présence des deux boutons de version au menu, caméra à hauteur des yeux, déplacement relatif au regard, porte ouest ouverte/refermée, déverrouillage et escalade de la fenêtre du bureau, déplacement jusqu’à l’interrupteur, extinction de toutes ses appliques puis rallumage, lampe torche, baisse de la caméra en accroupissement, vrai verrouillage du pointeur et orientation à la souris, aller-retour F2 sans recommencer la partie. Dix lumières ponctuelles restent attachées au rendu. Aucune erreur JavaScript/WebGL. Les captures extérieure, bureau éclairé et bureau éteint ont été inspectées.
+
+Le parcours solo du dessus passe également (porte, fenêtre, escalade, bouteille, pause et visibilité). Le parcours observateur passe (deux étages, zoom molette, suivi, vitesse, première élimination autonome, pause et plans). Les plafonds et les appliques restent hors du regroupement des meshes statiques pour conserver leurs changements de visibilité et d’émission. Le rendu logiciel des essais ne mesure pas les performances sur un GPU de joueur.

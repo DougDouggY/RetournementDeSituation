@@ -1,6 +1,6 @@
 {
   "name": "retournement-de-situation",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -21,7 +21,8 @@
     "deploy:coop": "npm run build:coop && wrangler deploy --config wrangler.coop.jsonc",
     "test:party": "node tests/party-browser.mjs",
     "test:observer": "npm run build && node tests/observer-browser.mjs",
-    "plans": "node scripts/generate-plans.mjs"
+    "plans": "node scripts/generate-plans.mjs",
+    "test:fps": "npm run build && node tests/first-person-browser.mjs"
   },
   "dependencies": {
     "@fontsource/barlow-condensed": "5.2.6",

@@ -481,6 +481,13 @@ export class GameScene {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.25;
     container.appendChild(this.renderer.domElement);
+    this.firstPerson = false;
+    this.lookYaw = 0;
+    this.lookPitch = 0;
+    this.fpsCamera = new THREE.PerspectiveCamera(75, 1, 0.06, 95);
+    this.fixtureMeshes = [];
+    this.floorLabels = [];
+    this.ceilings = [];
     this.camera = new THREE.OrthographicCamera(-14, 14, 10, -10, 0.1, 100);
     this.camera.position.set(0, 27, 17);
     this.camera.lookAt(0, 0, 0);
@@ -749,6 +756,7 @@ export class GameScene {
       const text = label('VIDE SUR LE HALL');
       text.position.set(ATRIUM.x, -0.12, ATRIUM.z);
       hall.add(text);
+      this.floorLabels.push(text);
     }
     for (const r of rooms.filter((r) => r.f === f)) {
       const roomGroup = new THREE.Group();
@@ -768,19 +776,62 @@ export class GameScene {
             box(roomGroup, part.x, 0.045, z, part.w - 0.1, 0.008, 0.018, 0x455952, 0);
       }
       const text = label(r.name.toUpperCase());
+      this.floorLabels.push(text);
       text.position.set(r.nav.x, 0.07, r.nav.z);
       roomGroup.add(text);
       let index = 0;
-      for (const part of r.parts)
-        for (const offset of part.w > 16 ? [-0.22, 0.22] : [0]) {
-          const glow = new THREE.PointLight(0xffdab2, 38, Math.max(part.w, part.d) + 8, 2);
-          glow.userData.roomId = r.id;
-          const x = part.x + part.w * offset;
-          glow.position.set(x, 3, part.z);
-          cylinder(roomGroup, x, 2.8, part.z, 0.32, 0.4, 0.12, 0xeadab7);
-          roomGroup.add(glow);
-          this.lightMeshes.set(index++ ? `${r.id}:${index}` : r.id, glow);
-        }
+      const candidates = walls
+        .filter((w) => w.f === f && (w.a === r.id || w.b === r.id) && Math.max(w.w, w.d) > 2.5)
+        .sort((a, b) => Math.max(b.w, b.d) - Math.max(a.w, a.d));
+      const selected = [];
+      for (const w of candidates) {
+        if (selected.some((o) => Math.hypot(w.x - o.x, w.z - o.z) < 4)) continue;
+        selected.push(w);
+        if (selected.length >= (r.area > 250 ? 4 : 2)) break;
+      }
+      for (const w of selected) {
+        const dx = w.axis === 'z' ? 0.4 : 0,
+          dz = w.axis === 'x' ? 0.4 : 0;
+        const sign = regionAt(f, w.x + dx, w.z + dz) === r.id ? 1 : -1;
+        const x = w.x + dx * sign,
+          z = w.z + dz * sign;
+        const glow = new THREE.PointLight(0xffdab2, 65, Math.max(r.w, r.d) + 8, 2);
+        glow.userData.roomId = r.id;
+        glow.position.set(x, 2.05, z);
+        const plate = box(
+          roomGroup,
+          x,
+          2.05,
+          z,
+          w.axis === 'z' ? 0.12 : 0.5,
+          0.62,
+          w.axis === 'z' ? 0.5 : 0.12,
+          0x343c35,
+        );
+        const shade = box(
+          roomGroup,
+          x + dx * sign * 0.3,
+          2.05,
+          z + dz * sign * 0.3,
+          0.34,
+          0.42,
+          0.34,
+          0xffe3b0,
+        );
+        shade.material = new THREE.MeshStandardMaterial({
+          color: 0xffe3b0,
+          emissive: 0xffb65b,
+          emissiveIntensity: 1,
+        });
+        this.fixtureMeshes.push({ mesh: shade, room: r.id });
+        roomGroup.add(glow);
+        this.lightMeshes.set(index++ ? `${r.id}:${index}` : r.id, glow);
+      }
+      for (const part of r.parts) {
+        const ceiling = box(roomGroup, part.x, 3.16, part.z, part.w, 0.12, part.d, 0x26302b);
+        ceiling.visible = false;
+        this.ceilings.push(ceiling);
+      }
     }
     for (const w of walls.filter((w) => w.f === f)) {
       const wallGroup = new THREE.Group();
@@ -818,6 +869,18 @@ export class GameScene {
       const doorGroup = new THREE.Group();
       group.add(doorGroup);
       this.doorGroups.set(d.id, doorGroup);
+      const lintel = box(
+        doorGroup,
+        d.x,
+        d.patio ? 2.825 : 2.575,
+        d.z,
+        d.axis === 'x' ? d.w : 0.24,
+        d.patio ? 0.65 : 1.15,
+        d.axis === 'z' ? d.d : 0.24,
+        0x778c80,
+      );
+      lintel.visible = false;
+      if (!d.window) this.ceilings.push(lintel);
       const pivot = new THREE.Group();
       const width = d.axis === 'z' ? d.d : d.w;
       pivot.position.set(
@@ -926,7 +989,28 @@ export class GameScene {
     for (const d of devices.filter((d) => d.f === f)) {
       const deviceGroup = this.roomMeshes.get(d.room) || group;
       if (d.type === 'light') {
-        box(deviceGroup, d.x, 0.035, d.z, 0.3, 0.05, 0.3, 0xc8bc86);
+        const wall = walls
+          .filter((w) => w.f === f && (w.a === d.room || w.b === d.room))
+          .map((w) => ({
+            w,
+            x: Math.max(w.x - w.w / 2, Math.min(w.x + w.w / 2, d.x)),
+            z: Math.max(w.z - w.d / 2, Math.min(w.z + w.d / 2, d.z)),
+          }))
+          .sort((a, b) => Math.hypot(a.x - d.x, a.z - d.z) - Math.hypot(b.x - d.x, b.z - d.z))[0];
+        if (wall) {
+          const dx = Math.sign(d.x - wall.x) * 0.14,
+            dz = Math.sign(d.z - wall.z) * 0.14;
+          box(
+            deviceGroup,
+            wall.x + dx,
+            1.2,
+            wall.z + dz,
+            wall.w.axis === 'z' ? 0.1 : 0.22,
+            0.3,
+            wall.w.axis === 'z' ? 0.22 : 0.1,
+            0xe8dec0,
+          );
+        }
         continue;
       }
       if (d.type === 'bottles') {
@@ -941,7 +1025,11 @@ export class GameScene {
       }
       if (d.type === 'breaker') box(deviceGroup, d.x, 1, d.z, 0.65, 1.4, 0.25, 0x5c7269);
     }
-    for (const r of rooms.filter((r) => r.f === f)) batchStatic(this.roomMeshes.get(r.id));
+    for (const r of rooms.filter((r) => r.f === f))
+      batchStatic(
+        this.roomMeshes.get(r.id),
+        new Set([...this.ceilings, ...this.fixtureMeshes.map((f) => f.mesh)]),
+      );
     batchStatic(hall);
     for (const w of this.wallGroups.filter((w) => w.f === f)) batchStatic(w.group);
     batchStatic(
@@ -957,6 +1045,8 @@ export class GameScene {
     const w = this.container.clientWidth || innerWidth,
       h = this.container.clientHeight || innerHeight;
     this.renderer.setSize(w, h);
+    this.fpsCamera.aspect = w / h;
+    this.fpsCamera.updateProjectionMatrix();
     const aspect = w / h,
       half = 10;
     this.camera.left = -half * aspect;
@@ -1004,6 +1094,16 @@ export class GameScene {
     a.legs[1].rotation.x = -gait;
     a.arms[0].rotation.x = -gait * 0.8;
     a.arms[1].rotation.x = gait * 0.8;
+    if (guard && p.state === 'party' && speed < 0.25) {
+      const beat = t * 1.8 + Number(p.id.slice(1)) * 1.7;
+      a.arms[0].rotation.x = -0.4 + Math.sin(beat) * 0.25;
+      a.arms[1].rotation.x = -0.7 + Math.sin(beat * 0.7) * 0.3;
+      a.head.rotation.y = Math.sin(beat * 0.35) * 0.14;
+      a.body.rotation.y = Math.sin(beat * 0.5) * 0.04;
+    } else {
+      a.head.rotation.y = 0;
+      a.body.rotation.y = 0;
+    }
     if (captured) {
       a.arms[0].rotation.x = -1.1;
       a.arms[1].rotation.x = -1.1;
@@ -1069,6 +1169,7 @@ export class GameScene {
     this.scene.fog.density = observer ? 0 : 0.012;
     this.viewer = observer ? null : me;
     if (observer && this.observerView === 'follow') this.observerFloor = me.f;
+    const fps = !!me && this.firstPerson && !observer;
     const f = observer ? this.observerFloor : (me?.f ?? 1);
     this.visibleRooms = observer
       ? new Set([
@@ -1097,7 +1198,15 @@ export class GameScene {
           !regions.some((r) => r !== 'outside' && this.visibleRooms.has(r)) &&
           regions.includes('outside')
             ? 1
-            : 0.18;
+            : fps
+              ? 1
+              : 0.18;
+      if (w.group.userData.upper) {
+        const upper = w.group.userData.upper;
+        upper.material.depthWrite = fps;
+        upper.scale.y = fps ? 1.5 : 1;
+        upper.position.y = fps ? 1.95 : 1.55;
+      }
       w.group.visible = !me || regions.some((r) => this.visibleRooms.has(r));
     }
     if (me)
@@ -1164,6 +1273,7 @@ export class GameScene {
           this.actors.set(p.id, a);
         }
         this.animateActor(this.actors.get(p.id), p, dt, this.elapsed, guard);
+        if (fps && p.id === myId) this.actors.get(p.id).root.visible = false;
       }
       for (const [id, a] of this.actors)
         if (!state.players.some((p) => p.id === id) && !state.guards.some((g) => g.id === id)) {
@@ -1385,6 +1495,27 @@ export class GameScene {
         light.decay = source.decay;
       }
     }
-    this.renderer.render(this.scene, this.camera);
+    for (const fixture of this.fixtureMeshes)
+      fixture.mesh.material.emissiveIntensity =
+        power && (!state || state.lights[fixture.room] !== false) ? 1 : 0;
+    for (const label of this.floorLabels) label.visible = !fps;
+    for (const ceiling of this.ceilings) ceiling.visible = fps;
+    if (fps) {
+      const height = me.crouching || me.hidden ? 0.95 : 1.65;
+      this.fpsCamera.position.set(me.x, height + (me.climbHeight || 0), me.z);
+      const direction = new THREE.Vector3(
+        Math.sin(this.lookYaw) * Math.cos(this.lookPitch),
+        Math.sin(this.lookPitch),
+        Math.cos(this.lookYaw) * Math.cos(this.lookPitch),
+      );
+      this.fpsCamera.lookAt(this.fpsCamera.position.clone().add(direction));
+      // The held torch follows the eye, including vertical aim.
+      const beam = this.sharedBeams[0];
+      if (me.torch) {
+        beam.position.copy(this.fpsCamera.position);
+        beam.target.position.copy(this.fpsCamera.position).addScaledVector(direction, 10);
+      }
+    }
+    this.renderer.render(this.scene, fps ? this.fpsCamera : this.camera);
   }
 }

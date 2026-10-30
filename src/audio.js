@@ -4,6 +4,7 @@ export class Sound {
     this.ctx = null;
     this.volumes = { music: 0.22, effects: 0.55, voices: 0.55 };
     this.lastEvent = 0;
+    this.spoken = new Map();
     this.lastStep = 0;
     this.lastPulse = 0;
   }
@@ -68,6 +69,12 @@ export class Sound {
   }
   voice(text) {
     if (!('speechSynthesis' in window) || this.volumes.voices < 0.01) return;
+    text = text.replaceAll('/', ' et ');
+    const now = performance.now(),
+      key = text.toLocaleLowerCase('fr');
+    if (now - (this.spoken.get(key) ?? -Infinity) < 45000) return;
+    if (speechSynthesis.speaking) return;
+    this.spoken.set(key, now);
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'fr-FR';
     u.rate = 1.1;

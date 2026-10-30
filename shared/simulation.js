@@ -1150,7 +1150,7 @@ export class Simulation {
       if (g.state !== 'chase') {
         this.speak(
           g,
-          `J’en ai vu un ${roomAt(p.f, p.x, p.z)?.name ? '— ' + roomAt(p.f, p.x, p.z).name + ' !' : 'dans le couloir !'}`,
+          `Il est là, ${roomAt(p.f, p.x, p.z)?.name?.replaceAll('/', ' et ') || 'dans le couloir'} !`,
         );
         for (const ally of this.guards)
           if (
