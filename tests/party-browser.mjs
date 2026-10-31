@@ -6,7 +6,7 @@ import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const base = 'http://127.0.0.1:5176';
 const server = spawn(process.execPath, ['server/local.js'], {
-  env: { ...process.env, PORT: '5176' },
+  env: { ...process.env, PORT: '5176', RDS_NO_HMR: '1' },
   stdio: 'ignore',
 });
 let browser;
@@ -61,23 +61,23 @@ try {
   await page.goto(base);
   await page.locator('#solo').click();
   await page.waitForFunction(() => window.__RDS?.state?.blood?.length === 1);
-  await page.keyboard.down('KeyX');
+  await page.keyboard.down('KeyE');
   await page.waitForFunction(() => window.__RDS.state.players[0].cleanProgress > 0.4);
   assert.equal(await page.locator('#rescue-bar span').textContent(), 'NETTOYER LE SANG');
-  await page.keyboard.up('KeyX');
+  await page.keyboard.up('KeyE');
   await page.waitForFunction(() => window.__RDS.state.players[0].cleanProgress === 0);
   assert.equal(await page.evaluate(() => window.__RDS.state.blood.length), 1);
-  await page.keyboard.down('KeyX');
+  await page.keyboard.down('KeyE');
   await page.waitForFunction(() => window.__RDS.state.blood.length === 0);
-  await page.keyboard.up('KeyX');
-  await page.keyboard.press('KeyR');
+  await page.keyboard.up('KeyE');
+  await page.keyboard.press('KeyE');
   await page.waitForFunction(() => !!window.__RDS.state.players[0].dragging);
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() => !!window.__RDS.state.bodies[0].hidden);
   assert.equal(await page.evaluate(() => window.__RDS.state.players[0].dragging), null);
   await fs.mkdir('test-results', { recursive: true });
   await page.screenshot({ path: 'test-results/party-clean-stash.png' });
-  await page.keyboard.press('KeyR');
+  await page.keyboard.press('KeyE');
   await page.waitForFunction(
     () => !!window.__RDS.state.players[0].dragging && !window.__RDS.state.bodies[0].hidden,
   );
@@ -90,11 +90,11 @@ try {
         errors,
         fixture: 'development worker response only',
         checks: [
-          'hold X progress and cancellation',
+          'hold E progress and cancellation',
           'blood removal',
-          'R drag',
+          'E drag',
           'E stash',
-          'R retrieve',
+          'E retrieve',
         ],
       },
       null,
@@ -102,7 +102,7 @@ try {
     ),
   );
   console.log(
-    'PASS actual keyboard X cleaning and cancellation, R drag, E stash and R retrieve; no JavaScript/WebGL errors',
+    'PASS actual keyboard E cleaning and cancellation, E drag, E stash and E retrieve; no JavaScript/WebGL errors',
   );
 } finally {
   await browser?.close();

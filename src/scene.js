@@ -4,6 +4,9 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import {
   rooms,
   FLOOR_IDS,
+  FLOOR_HEIGHT,
+  stairVoids,
+  illuminationAt,
   WORLD,
   HOUSE,
   POOL,
@@ -37,6 +40,48 @@ const palettes = [
   { floor: 0x56655c, wall: 0x75908a },
   { floor: 0x6b5355, wall: 0x968784 },
 ];
+function visualPose(p) {
+  if (p.stair) {
+    const s = p.stair,
+      t = Math.min(1, s.elapsed / s.duration);
+    return new THREE.Vector3(
+      s.fromX + (s.x - s.fromX) * t,
+      (s.fromF - 1) * FLOOR_HEIGHT + (s.toF - s.fromF) * FLOOR_HEIGHT * t,
+      s.fromZ + (s.z - s.fromZ) * t,
+    );
+  }
+  return new THREE.Vector3(p.x, (p.f - 1) * FLOOR_HEIGHT + (p.climbHeight || 0), p.z);
+}
+function cutRects(parts, holes) {
+  for (const hole of holes) {
+    const next = [];
+    for (const p of parts) {
+      const l = p.x - p.w / 2,
+        r = p.x + p.w / 2,
+        t = p.z - p.d / 2,
+        b = p.z + p.d / 2;
+      const L = Math.max(l, hole.x - hole.w / 2),
+        R = Math.min(r, hole.x + hole.w / 2),
+        T = Math.max(t, hole.z - hole.d / 2),
+        B = Math.min(b, hole.z + hole.d / 2);
+      if (L >= R || T >= B) {
+        next.push(p);
+        continue;
+      }
+      for (const [x1, z1, x2, z2] of [
+        [l, t, r, T],
+        [l, B, r, b],
+        [l, T, L, B],
+        [R, T, r, B],
+      ])
+        if (x2 > x1 && z2 > z1)
+          next.push({ x: (x1 + x2) / 2, z: (z1 + z2) / 2, w: x2 - x1, d: z2 - z1 });
+    }
+    parts = next;
+  }
+  return parts;
+}
+const stairHoles = stairVoids;
 const matCache = new Map(),
   geoCache = new Map();
 function material(color, roughness = 0.85) {
@@ -201,7 +246,22 @@ function furniture(p) {
       b(0, 0.83, -d / 2 + 0.65, w * 0.65, 0.2, 0.8, 0xd7d1b7);
       b(0, 0.7, -d / 2, w, 1.3, 0.16, wood);
       break;
-    case 'wardrobe':
+    case 'wardrobe': {
+      b(0, 1.25, -d / 2 + 0.06, w, 2.5, 0.12, wood);
+      for (const x of [-w / 2 + 0.06, w / 2 - 0.06]) b(x, 1.25, 0, 0.12, 2.5, d, wood);
+      for (const y of [0.08, 2.5]) b(0, y, 0, w, 0.12, d, wood);
+      const leaves = [];
+      for (const side of [-1, 1]) {
+        const hinge = new THREE.Group();
+        hinge.position.set((side * w) / 2, 0, d / 2);
+        group.add(hinge);
+        box(hinge, (-side * w) / 4, 1.25, 0, w / 2 - 0.02, 2.45, 0.09, wood);
+        box(hinge, -side * (w / 2 - 0.1), 1.2, 0.07, 0.05, 0.25, 0.06, 0xc2a166);
+        leaves.push(hinge);
+      }
+      group.userData.cabinetLeaves = leaves;
+      break;
+    }
     case 'fridge':
       b(0, 1.25, 0, w, 2.5, d, p.type === 'fridge' ? 0xb6c6be : wood);
       b(0, 1.3, d / 2 + 0.025, 0.035, 2.3, 0.04, 0x292d2b);
@@ -286,6 +346,20 @@ function furniture(p) {
         emissive: 0x8ea7a0,
         emissiveIntensity: 0.2,
       });
+      break;
+    case 'bush':
+      for (let i = 0; i < 8; i++)
+        sphere(
+          group,
+          (((i % 4) - 1.5) * w) / 6,
+          0.65 + (i % 2) * 0.15,
+          ((Math.floor(i / 4) - 0.5) * d) / 2,
+          0.6,
+          0x294a32,
+          w / 3,
+          1,
+          d / 3,
+        );
       break;
     case 'plant':
       cylinder(group, 0, 0.24, 0, 0.26, 0.19, 0.46, 0x86634e);
@@ -488,7 +562,7 @@ export class GameScene {
       antialias: true,
       powerPreference: 'high-performance',
     });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -560,6 +634,8 @@ export class GameScene {
     this.roomMeshes.set('outside', this.exterior);
     this.floors = [];
     this.doorMeshes = new Map();
+    this.cabinetMeshes = new Map();
+    this.fpsWallFaces = [];
     this.doorGroups = new Map();
     this.lightMeshes = new Map();
     this.windowGlass = new Map();
@@ -736,12 +812,15 @@ export class GameScene {
       if (id === 'outside') continue;
       // Stable interior bounce light on the room-facing side of each opaque wall.
       // Exterior faces stay dark; no point light needs to turn on at a window.
+      const faces = new THREE.Group();
+      group.add(faces);
+      this.fpsWallFaces.push(faces);
       for (const w of walls.filter((w) => !w.railing && (w.a === id || w.b === id))) {
         const dx = w.axis === 'z' ? 0.13 : 0,
           dz = w.axis === 'x' ? 0.13 : 0;
         const sign = regionAt(w.f, w.x + dx, w.z + dz) === id ? 1 : -1;
         const face = box(
-          group,
+          faces,
           w.x + dx * sign,
           1.56,
           w.z + dz * sign,
@@ -752,9 +831,8 @@ export class GameScene {
           0,
         );
         face.castShadow = false;
-        face.visible = false;
-        this.ceilings.push(face);
       }
+      batchStatic(faces);
       const copies = new Map();
       group.traverse((mesh) => {
         if (!mesh.isMesh || this.fixtureMeshes.some((f) => f.mesh === mesh)) return;
@@ -789,7 +867,10 @@ export class GameScene {
               }
               return false;
             });
+      this.scene.updateMatrixWorld(true);
+      const position = light.getWorldPosition(new THREE.Vector3());
       light.removeFromParent();
+      light.position.copy(position);
     }
     this.localLights = Array.from({ length: 8 }, () => {
       const light = new THREE.PointLight(0xffffff, 0);
@@ -816,16 +897,17 @@ export class GameScene {
   buildFloor(f) {
     const group = new THREE.Group();
     this.floors[f] = group;
+    group.position.y = (f - 1) * FLOOR_HEIGHT;
     this.scene.add(group);
     group.visible = f === 1;
-    for (const part of houseFloorParts(f)) {
+    for (const part of cutRects(houseFloorParts(f), f === 2 ? stairHoles : [])) {
       const base = box(group, part.x, -0.18, part.z, part.w, 0.35, part.d, 0x010205);
       base.material = new THREE.MeshBasicMaterial({ color: 0x010205 });
     }
     const hall = new THREE.Group();
     group.add(hall);
     this.roomMeshes.set(`hall${f}`, hall);
-    for (const part of hallFloorParts(f)) {
+    for (const part of cutRects(hallFloorParts(f), f === 2 ? stairHoles : [])) {
       box(hall, part.x, 0.005, part.z, part.w, 0.04, part.d, 0x85765c);
       for (let x = part.x - part.w / 2 + 0.5; x < part.x + part.w / 2; x += 1.5)
         box(hall, x, 0.035, part.z, 0.02, 0.005, part.d, 0x574e40, 0);
@@ -856,7 +938,7 @@ export class GameScene {
       group.add(roomGroup);
       this.roomMeshes.set(r.id, roomGroup);
       const palette = palettes[r.style];
-      for (const part of roomFloorParts(r)) {
+      for (const part of cutRects(roomFloorParts(r), f === 2 ? stairHoles : [])) {
         box(roomGroup, part.x, -0.015, part.z, part.w - 0.1, 0.1, part.d - 0.1, palette.floor, 0);
         for (
           let x = part.x - part.w / 2 + 0.5;
@@ -920,7 +1002,7 @@ export class GameScene {
         roomGroup.add(glow);
         this.lightMeshes.set(index++ ? `${r.id}:${index}` : r.id, glow);
       }
-      for (const part of r.parts) {
+      for (const part of cutRects(r.parts, f === 1 ? [ATRIUM, ...stairHoles] : [])) {
         const ceiling = box(roomGroup, part.x, 3.16, part.z, part.w, 0.12, part.d, 0x26302b);
         ceiling.visible = false;
         this.ceilings.push(ceiling);
@@ -971,9 +1053,9 @@ export class GameScene {
         d.patio ? 0.65 : 0.45,
         d.axis === 'z' ? d.d : 0.24,
         0x778c80,
+        0,
       );
-      lintel.visible = false;
-      if (!d.window) this.ceilings.push(lintel);
+      lintel.visible = !d.window;
       const pivot = new THREE.Group();
       const width = d.axis === 'z' ? d.d : d.w;
       pivot.position.set(
@@ -1044,6 +1126,11 @@ export class GameScene {
         leaf.material.transparent = false;
         leaf.material.opacity = 1;
         box(pivot, 1.75, 1.1, 0.12, 0.12, 0.12, 0.14, 0xc2a166);
+        for (const side of [-1, 1]) {
+          box(pivot, 1.7, 1.02, side * 0.085, 0.18, 0.28, 0.025, 0xc2a166);
+          const hole = box(pivot, 1.7, 1.02, side * 0.102, 0.045, 0.09, 0.005, 0x010101, 0);
+          hole.material = new THREE.MeshBasicMaterial({ color: 0x010101 });
+        }
         for (const side of [-1, 1])
           box(
             doorGroup,
@@ -1058,26 +1145,49 @@ export class GameScene {
       }
       this.doorMeshes.set(d.id, pivot);
     }
-    for (const p of props.filter((p) => p.f === f && p.type !== 'pool'))
-      (this.roomMeshes.get(p.room) || group).add(furniture(p));
-    for (const s of stairs.filter((s) => s.f === f && s.to !== null)) {
-      for (let j = 0; j < 7; j++) {
-        const dir = Math.sign(s.landing.z - s.z),
-          length = Math.abs(s.landing.z - s.z);
+    for (const p of props.filter((p) => p.f === f && p.type !== 'pool')) {
+      const mesh = furniture(p);
+      (this.roomMeshes.get(p.room) || group).add(mesh);
+      if (mesh.userData.cabinetLeaves) this.cabinetMeshes.set(p.id, mesh);
+    }
+    for (const s of stairs.filter((s) => s.f === f && s.to === 2)) {
+      const length = Math.abs(s.landing.z - s.z),
+        dir = Math.sign(s.landing.z - s.z);
+      for (let j = 0; j < 16; j++)
         box(
           hall,
           s.x,
-          0.07 + j * 0.1,
-          s.z + (dir * j * length) / 7,
-          2.3,
-          0.12 + j * 0.17,
-          length / 7,
+          ((j + 0.5) * FLOOR_HEIGHT) / 16,
+          s.z + (dir * (j + 0.5) * length) / 16,
+          2.15,
+          FLOOR_HEIGHT / 16,
+          length / 16,
           0x7a8276,
+          0,
         );
+      for (const side of [-1, 1]) {
+        for (let j = 0; j <= 16; j++)
+          cylinder(
+            hall,
+            s.x + side * 1.08,
+            (j * FLOOR_HEIGHT) / 16 + 0.48,
+            s.z + (dir * j * length) / 16,
+            0.035,
+            0.035,
+            0.96,
+            0x52645d,
+          );
+        const rail = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.045, 0.045, Math.hypot(length, FLOOR_HEIGHT), 8),
+          material(0x718376),
+        );
+        rail.position.set(s.x + side * 1.08, FLOOR_HEIGHT / 2 + 0.96, (s.z + s.landing.z) / 2);
+        rail.quaternion.setFromUnitVectors(
+          new THREE.Vector3(0, 1, 0),
+          new THREE.Vector3(0, FLOOR_HEIGHT, dir * length).normalize(),
+        );
+        hall.add(rail);
       }
-      const t = label(s.to > f ? '↑ ÉTAGE' : '↓ REZ-DE-CHAUSSÉE', '#d7c093');
-      t.position.set(s.x, 0.8, s.z);
-      hall.add(t);
     }
     for (const d of devices.filter((d) => d.f === f)) {
       const deviceGroup = this.roomMeshes.get(d.room) || group;
@@ -1121,7 +1231,11 @@ export class GameScene {
     for (const r of rooms.filter((r) => r.f === f))
       batchStatic(
         this.roomMeshes.get(r.id),
-        new Set([...this.ceilings, ...this.fixtureMeshes.map((f) => f.mesh)]),
+        new Set([
+          ...this.ceilings,
+          ...this.cabinetMeshes.values(),
+          ...this.fixtureMeshes.map((f) => f.mesh),
+        ]),
       );
     batchStatic(hall);
     for (const w of this.wallGroups.filter((w) => w.f === f)) batchStatic(w.group);
@@ -1162,12 +1276,41 @@ export class GameScene {
     return Math.atan2(point.x - player.x, point.z - player.z);
   }
   setQuality(low) {
-    this.renderer.setPixelRatio(low ? 0.8 : Math.min(devicePixelRatio, 1.7));
+    this.lowQuality = low;
+    this.adapted = false;
+    this.slowSeconds = 0;
+    this.renderer.setPixelRatio(low ? 0.8 : Math.min(devicePixelRatio, 1.25));
     this.renderer.shadowMap.enabled = !low;
     this.resize();
   }
+  adaptQuality(fps) {
+    if (this.lowQuality || this.adapted) return;
+    this.slowSeconds = fps < 32 ? (this.slowSeconds || 0) + 1 : 0;
+    if (this.slowSeconds >= 3) {
+      this.adapted = true;
+      this.renderer.setPixelRatio(Math.min(devicePixelRatio, 0.9));
+      this.renderer.shadowMap.enabled = false;
+      this.resize();
+    }
+  }
   animateActor(a, p, dt, t, guard = false) {
-    const target = new THREE.Vector3(p.x, p.climbHeight || 0, p.z);
+    if (!a.ambientMaterials) {
+      const copies = new Map();
+      a.root.traverse((m) => {
+        if (!m.isMesh || !m.material.emissive) return;
+        const original = m.material;
+        if (!copies.has(original)) {
+          const copy = original.clone();
+          copy.emissive.copy(copy.color);
+          copies.set(original, copy);
+        }
+        m.material = copies.get(original);
+      });
+      a.ambientMaterials = [...copies.values()];
+    }
+    const lit = illuminationAt(p, this.lastState?.lights, this.lastState?.power) !== 0;
+    for (const material of a.ambientMaterials) material.emissiveIntensity = lit ? 0.2 : 0;
+    const target = visualPose(p);
     const previous = a.root.position.clone();
     a.root.position.lerp(target, Math.min(1, dt * 16));
     const speed = previous.distanceTo(a.root.position) / Math.max(dt, 0.001);
@@ -1258,11 +1401,20 @@ export class GameScene {
           ? Math.sin(t * 1.8 + Number(p.id.slice(1)) * 1.7) * 0.055
           : 0;
     a.hideAmount = THREE.MathUtils.damp(a.hideAmount || 0, p.hidden ? 1 : 0, 13, dt);
-    a.root.visible = p.f === this.floor && a.hideAmount < 0.98 && p.alive !== false;
+    a.root.visible =
+      (this.firstPerson ||
+        p.f === this.floor ||
+        (this.floor === 2 &&
+          p.f === 1 &&
+          [ATRIUM, ...stairHoles].some(
+            (h) => Math.abs(p.x - h.x) < h.w / 2 && Math.abs(p.z - h.z) < h.d / 2,
+          ))) &&
+      (!p.hidden || this.lastState.time - (p.hideAt || 0) < 0.55) &&
+      p.alive !== false;
     const me = this.viewer;
-    if (me && p.id !== me.id)
+    if (me && p.id !== me.id && !this.firstPerson && p.f === me.f)
       a.root.visible = a.root.visible && canObserve(me, p, this.lastState.doors, this.visibleRooms);
-    a.root.scale.setScalar(1 - a.hideAmount * 0.94);
+    a.root.scale.setScalar(1);
     if (a.weapon) a.weapon.visible = p.armed !== false;
     const beam = (guard ? p.armed !== false : p.torch) && !p.hidden;
     a.torch.visible = beam && (!guard || this.nearLightIds?.has(p.id));
@@ -1282,9 +1434,11 @@ export class GameScene {
     this.scene.fog.density = observer ? 0 : 0.012;
     this.viewer = observer ? null : me;
     if (observer && this.observerView === 'follow') this.observerFloor = me.f;
-    const fps = !!me && this.firstPerson && !observer;
+    const fps = !!me && (this.firstPerson || !!me.hidden || !!me.peeking) && !observer;
+    this.effectiveFirstPerson = fps;
     const f = observer ? this.observerFloor : (me?.f ?? 1);
-    const indoors = fps && regionAt(f, me.x, me.z) !== 'outside';
+    const viewingPosition = me ? peekView(me, state.doors) : null;
+    const indoors = fps && regionAt(f, viewingPosition.x, viewingPosition.z) !== 'outside';
     this.ambientLight.intensity = indoors ? 0.015 : 0.16;
     this.moon.intensity = indoors ? 0 : 0.2;
     this.visibleRooms = observer
@@ -1301,9 +1455,14 @@ export class GameScene {
       this.container.classList.add('floor-change');
       setTimeout(() => this.container.classList.remove('floor-change'), 220);
     }
-    this.floors.forEach((g, i) => (g.visible = i === this.floor));
+    this.floors.forEach((g, i) => (g.visible = fps || this.floor === 2 || i === this.floor));
+    this.groundPlane.constant = -(f - 1) * FLOOR_HEIGHT;
     for (const [id, group] of this.roomMeshes)
-      group.visible = fps || !me || this.visibleRooms.has(id);
+      group.visible =
+        fps ||
+        (f === 2 && (id.startsWith('r1-') || id === 'hall1')) ||
+        !me ||
+        this.visibleRooms.has(id);
     this.ground.visible = fps || !me || this.visibleRooms.has('outside');
     if (observer) this.exterior.visible = f === 1;
     for (const w of this.wallGroups) {
@@ -1324,7 +1483,8 @@ export class GameScene {
         upper.scale.y = fps ? 1.5 : 1;
         upper.position.y = fps ? 1.95 : 1.55;
       }
-      w.group.visible = fps || !me || regions.some((r) => this.visibleRooms.has(r));
+      w.group.visible =
+        fps || (f === 2 && w.f === 1) || !me || regions.some((r) => this.visibleRooms.has(r));
     }
     if (me)
       for (const d of doors) {
@@ -1333,7 +1493,8 @@ export class GameScene {
           regionAt(d.f, d.x + normal.x, d.z + normal.z),
           regionAt(d.f, d.x - normal.x, d.z - normal.z),
         ].some((r) => this.visibleRooms.has(r));
-        this.doorGroups.get(d.id).visible = d.f === this.floor && (fps || visible);
+        this.doorGroups.get(d.id).visible =
+          (fps || f === 2 || d.f === this.floor) && (fps || (f === 2 && d.f === 1) || visible);
       }
     if (observer)
       this.target.set(
@@ -1343,6 +1504,7 @@ export class GameScene {
       );
     else if (me) this.target.lerp(new THREE.Vector3(me.x, 0, me.z), 1 - Math.exp(-dt * 5));
     else this.target.set(-9, 0, -5);
+    this.target.y = (f - 1) * FLOOR_HEIGHT;
     this.camera.position
       .copy(this.target)
       .add(observer ? new THREE.Vector3(0, 45, 0.01) : new THREE.Vector3(0, 27, 17));
@@ -1369,7 +1531,7 @@ export class GameScene {
               g.alive !== false &&
               g.armed !== false &&
               g.f === this.floor &&
-              (!me || canObserve(me, g, state.doors, this.visibleRooms)),
+              (!me || this.firstPerson || canObserve(me, g, state.doors, this.visibleRooms)),
           )
           .sort(
             (a, b) =>
@@ -1397,6 +1559,8 @@ export class GameScene {
           a.root.visible = false;
         }
       for (const [id, pivot] of this.doorMeshes) {
+        pivot.visible = !state.brokenDoors?.[id];
+        if (pivot.userData.doublePivot) pivot.userData.doublePivot.visible = pivot.visible;
         if (pivot.userData.sliding) {
           const height = state.doors[id] ? 1.3 : 0;
           pivot.position.y += (height - pivot.position.y) * Math.min(1, dt * 7);
@@ -1433,7 +1597,7 @@ export class GameScene {
             }),
           );
           ring.rotation.x = -Math.PI / 2;
-          ring.position.set(noise.x, 0.1, noise.z);
+          ring.position.set(noise.x, (noise.f - 1) * FLOOR_HEIGHT + 0.1, noise.z);
           this.scene.add(ring);
           this.effects.push({ id: noise.id, mesh: ring, life: 0, max: noise.radius * 0.5 });
         }
@@ -1452,7 +1616,7 @@ export class GameScene {
         this.bodyMeshes.set(b.id, actor);
       }
       const actor = this.bodyMeshes.get(b.id);
-      actor.root.position.set(b.x, 0.28, b.z);
+      actor.root.position.set(b.x, (b.f - 1) * FLOOR_HEIGHT + 0.28, b.z);
       actor.root.rotation.y = b.angle;
       actor.root.visible =
         (!b.hidden || observer) &&
@@ -1470,7 +1634,7 @@ export class GameScene {
         (observer ? mark.f !== f : !canObserve(me, mark, state.doors, this.visibleRooms))
       )
         continue;
-      stamp.position.set(mark.x, 0.085, mark.z);
+      stamp.position.set(mark.x, (mark.f - 1) * FLOOR_HEIGHT + 0.085, mark.z);
       stamp.rotation.set(-Math.PI / 2, 0, 0);
       stamp.scale.set(mark.size, mark.size * 0.7, 1);
       stamp.updateMatrix();
@@ -1493,7 +1657,7 @@ export class GameScene {
         t = Math.min(1, (state.time - b.at) / (b.duration || 0.65));
       mesh.position.set(
         THREE.MathUtils.lerp(b.fromX, b.x, t),
-        0.16 + (1 - t) * 0.9 + Math.sin(t * Math.PI) * (b.height || 2),
+        (b.f - 1) * FLOOR_HEIGHT + 0.16 + (1 - t) * 0.9 + Math.sin(t * Math.PI) * (b.height || 2),
         THREE.MathUtils.lerp(b.fromZ, b.z, t),
       );
       mesh.rotation.z = t * 8;
@@ -1559,7 +1723,8 @@ export class GameScene {
       state && me
         ? [
             ...state.players.filter(
-              (p) => p.f === this.floor && p.torch && !p.hidden && p.status === 'free',
+              (p) =>
+                p.f === this.floor && p.torch && !p.hidden && !p.peeking && p.status === 'free',
             ),
             ...state.guards.filter((g) => this.nearLightIds?.has(g.id)),
           ]
@@ -1576,11 +1741,11 @@ export class GameScene {
       light.distance = 18;
       light.angle = 0.58;
       if (p) {
-        light.position.set(p.x, 1.35, p.z);
+        light.position.set(p.x, (p.f - 1) * FLOOR_HEIGHT + 1.35, p.z);
         const pitch = fps && p.id === myId ? this.lookPitch : -0.14;
         light.target.position.set(
           p.x + Math.sin(p.angle) * Math.cos(pitch) * 8,
-          1.35 + Math.sin(pitch) * 8,
+          (p.f - 1) * FLOOR_HEIGHT + 1.35 + Math.sin(pitch) * 8,
           p.z + Math.cos(p.angle) * Math.cos(pitch) * 8,
         );
       }
@@ -1592,12 +1757,15 @@ export class GameScene {
         const t = i / 32;
         return new THREE.Vector3(
           me.x + (trajectory.x - me.x) * t,
-          0.16 + (1 - t) * 0.9 + Math.sin(t * Math.PI) * trajectory.height,
+          (me.f - 1) * FLOOR_HEIGHT +
+            0.16 +
+            (1 - t) * 0.9 +
+            Math.sin(t * Math.PI) * trajectory.height,
           me.z + (trajectory.z - me.z) * t,
         );
       });
       this.throwAim.geometry.setFromPoints(points);
-      this.throwLanding.position.set(trajectory.x, 0.12, trajectory.z);
+      this.throwLanding.position.set(trajectory.x, (me.f - 1) * FLOOR_HEIGHT + 0.12, trajectory.z);
     }
     const candidates = this.localLightSources
       .filter((light) => {
@@ -1605,7 +1773,8 @@ export class GameScene {
         return (
           light.userData.floor === this.floor &&
           (fps
-            ? (region.startsWith('hall') ? `hall${f}` : region) === regionAt(f, me.x, me.z)
+            ? (region.startsWith('hall') ? `hall${f}` : region) ===
+              regionAt(f, viewingPosition.x, viewingPosition.z)
             : !me ||
               !region ||
               this.visibleRooms.has(region.startsWith('hall') ? `hall${this.floor}` : region))
@@ -1635,19 +1804,60 @@ export class GameScene {
         power && (!state || state.lights[fixture.room] !== false) ? 1 : 0;
     for (const label of this.floorLabels) label.visible = !fps;
     for (const ceiling of this.ceilings) ceiling.visible = fps;
+    for (const faces of this.fpsWallFaces) faces.visible = fps;
+    for (const [id, cabinet] of this.cabinetMeshes) {
+      const h = hides.find((h) => h.prop === id),
+        occupant = state?.players.find((p) => p.hidden === h?.id);
+      const opening = occupant
+        ? occupant.hidePeek
+          ? 0.19
+          : this.elapsed - (this.cabinetSeen?.get(id) ?? this.elapsed) < 0.6
+            ? 1.1
+            : 0
+        : 0;
+      this.cabinetSeen ||= new Map();
+      if (occupant && !this.cabinetSeen.has(id)) this.cabinetSeen.set(id, this.elapsed);
+      if (!occupant) this.cabinetSeen.delete(id);
+      cabinet.userData.cabinetLeaves.forEach(
+        (leaf, i) =>
+          (leaf.rotation.y = THREE.MathUtils.damp(leaf.rotation.y, (i ? 1 : -1) * opening, 12, dt)),
+      );
+    }
     if (fps) {
-      const height = me.crouching || me.hidden ? 0.95 : 1.65;
+      const height = me.peeking ? 1.02 : me.crouching || me.hidden ? 0.95 : 1.65;
       const eye = peekView(me, state.doors);
-      this.fpsCamera.position.set(eye.x, height + (me.climbHeight || 0), eye.z);
+      const pose = visualPose(me),
+        desired = new THREE.Vector3(eye.x, height + pose.y, eye.z);
+      if (me.stair) {
+        desired.x = pose.x;
+        desired.z = pose.z;
+      }
+      if (!this.eyePosition || this.eyePosition.distanceTo(desired) > 4 || me.peeking)
+        this.eyePosition = desired;
+      else this.eyePosition.lerp(desired, 1 - Math.exp(-dt * 24));
+      this.fpsCamera.position.copy(this.eyePosition);
+      const hide = hides.find((h) => h.id === me.hidden),
+        cabinet = props.find((p) => p.id === hide?.prop);
+      const door = doors.find((d) => d.id === me.peeking);
+      const keyholeYaw = door
+        ? door.axis === 'z'
+          ? me.x < door.x
+            ? Math.PI / 2
+            : -Math.PI / 2
+          : me.z < door.z
+            ? 0
+            : Math.PI
+        : this.lookYaw;
+      const yaw = me.hidden ? cabinet?.rotation || 0 : me.peeking ? keyholeYaw : this.lookYaw;
       const direction = new THREE.Vector3(
-        Math.sin(this.lookYaw) * Math.cos(this.lookPitch),
+        Math.sin(yaw) * Math.cos(this.lookPitch),
         Math.sin(this.lookPitch),
-        Math.cos(this.lookYaw) * Math.cos(this.lookPitch),
+        Math.cos(yaw) * Math.cos(this.lookPitch),
       );
       this.fpsCamera.lookAt(this.fpsCamera.position.clone().add(direction));
       // The held torch follows the eye, including vertical aim.
       const beam = this.sharedBeams[0];
-      if (me.torch) {
+      if (me.torch && !me.peeking) {
         beam.position.copy(this.fpsCamera.position);
         beam.target.position.copy(this.fpsCamera.position).addScaledVector(direction, 10);
       }

@@ -63,8 +63,13 @@ test('remaining barricaded attracts investigation and the lock eventually gives 
   advance(s, 26);
   assert.ok(s.doorLocks['d1-4'].questioned);
   assert.ok(s.events.some((e) => e.text.includes('vérifier')));
-  advance(s, 20);
+  // A door does not break on its own: an alerted guest must actually strike it.
+  s.phase = 'playing';
+  const g = s.guards[0];
+  Object.assign(g, { f: 1, x: 9.8, z: 3, path: [], pathAt: -2 });
+  for (let i = 0; i < 120; i++) s.navigate(g, { f: 1, x: 13, z: 3 }, 0.05, 2);
   assert.equal(s.doorLocks['d1-4'], undefined);
+  assert.equal(s.brokenDoors['d1-4'], true);
 });
 test('opening the garage window is audible nearby but never across the house or upstairs', () => {
   const s = game(),

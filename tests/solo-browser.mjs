@@ -79,6 +79,19 @@ try {
   await page.waitForFunction(() => window.__RDS.visibleRooms.includes('hall1'));
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() => !window.__RDS.state.doors['entry-west']);
+  await page.keyboard.down('KeyE');
+  await page.waitForFunction(
+    () =>
+      window.__RDS.state.players[0].peeking === 'entry-west' &&
+      window.__RDS.viewMode === 'first-person',
+  );
+  assert.equal(await page.evaluate(() => window.__RDS.state.doors['entry-west']), false);
+  await page.screenshot({ path: 'test-results/keyhole-from-top-view.png' });
+  await page.keyboard.up('KeyE');
+  await page.waitForFunction(
+    () => !window.__RDS.state.players[0].peeking && window.__RDS.viewMode === 'top',
+  );
+
   await page.keyboard.down('KeyG');
   await page.waitForFunction(() => window.__RDS.state.players[0].throwCharge > 0.15);
   await page.keyboard.up('KeyG');

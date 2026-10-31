@@ -147,8 +147,8 @@ test('a masked player gets one short challenge, then fleeing or staying too long
     const s = solo(),
       p = s.players[0],
       g = s.guards[0];
-    Object.assign(g, { x: -34, z: 8, angle: Math.PI / 2 });
-    Object.assign(p, { x: -31, z: 8 });
+    Object.assign(g, { x: -34, z: 1, angle: Math.PI / 2 });
+    Object.assign(p, { x: -31, z: 1 });
     s.updateGuest(g, 0.05);
     assert.equal(g.state, 'confrontation');
     assert.equal(s.phase, 'infiltration');
@@ -166,8 +166,8 @@ test('losing sight of the challenged masked intruder also raises the alarm', () 
   const s = solo(),
     p = s.players[0],
     g = s.guards[0];
-  Object.assign(g, { x: -34, z: 8, angle: Math.PI / 2 });
-  Object.assign(p, { x: -31, z: 8 });
+  Object.assign(g, { x: -34, z: 1, angle: Math.PI / 2 });
+  Object.assign(p, { x: -31, z: 1 });
   s.updateGuest(g, 0.05);
   Object.assign(p, { x: -34, z: 3 });
   s.updateGuest(g, 0.05);

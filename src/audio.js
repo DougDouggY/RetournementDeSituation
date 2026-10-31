@@ -1,4 +1,4 @@
-import { lineClear } from '../shared/map.js';
+import { lineClear, regionAt } from '../shared/map.js';
 
 export function proximityGain(source, listener, doors = {}, range = 14) {
   if (source.f !== listener.f) return 0;
@@ -164,7 +164,12 @@ export class Sound {
     // Original terrace loop, synthesized locally; no remote audio or samples.
     const party =
       state.power !== false && state.phase === 'infiltration'
-        ? proximityGain({ f: 1, x: -12, z: -22 }, me, state.doors, 38)
+        ? Math.max(
+            proximityGain({ f: 1, x: -12, z: -22 }, me, state.doors, 70),
+            me.f === 1 && regionAt(me.f, me.x, me.z) === 'outside'
+              ? Math.max(0, 0.45 - Math.hypot(me.x + 12, me.z + 22) / 130)
+              : 0,
+          )
         : 0;
     if (now - this.lastMusic > 60000 / 110 / 2) {
       this.lastMusic = now;

@@ -158,8 +158,8 @@ test('power outage reduces guest detection while a flashlight can still reveal t
   const s = solo(),
     p = s.players[0],
     g = s.guards[0];
-  Object.assign(g, { x: -34, z: 8, angle: Math.PI / 2 });
-  Object.assign(p, { x: -28, z: 8, torch: false });
+  Object.assign(g, { x: -34, z: 1, angle: Math.PI / 2 });
+  Object.assign(p, { x: -28, z: 1, torch: false });
   assert.equal(s.canSee(g, p), true);
   s.power = false;
   assert.equal(s.canSee(g, p), false);

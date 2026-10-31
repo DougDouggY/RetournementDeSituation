@@ -1094,3 +1094,5 @@ dialog p {
 #solo-fps {
   margin-top: 8px;
 }
+
+#observation-mask{position:fixed;inset:0;z-index:3;pointer-events:none}#observation-mask.keyhole-mask{background:radial-gradient(circle 115px at 50% 50%,transparent 96%,#090604 100%)}#observation-mask.cabinet-closed-mask{background:#070503}#observation-mask.cabinet-peek-mask{background:linear-gradient(90deg,#070503 35%,transparent 39%,transparent 61%,#070503 65%)}

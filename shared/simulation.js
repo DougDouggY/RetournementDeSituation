@@ -1,5 +1,8 @@
 import {
   NIGHT,
+  illuminationAt,
+  inBush,
+  peekView,
   FLOORS,
   SPAWN,
   CAPTURE_POINT,
@@ -56,6 +59,7 @@ export class Simulation {
     this.players = [];
     this.guards = [];
     this.doorLocks = {};
+    this.brokenDoors = {};
     this.doorStates = Object.fromEntries(doors.map((d) => [d.id, false]));
     this.lightStates = Object.fromEntries(rooms.map((r) => [r.id, true]));
     this.noises = [];
@@ -126,6 +130,7 @@ export class Simulation {
     this.visits = {};
     this.thrown = [];
     this.doorLocks = {};
+    this.brokenDoors = {};
     this.doorStates = Object.fromEntries(doors.map((d) => [d.id, false]));
     this.lightStates = Object.fromEntries(rooms.map((r) => [r.id, true]));
     this.players.forEach((p, i) =>
@@ -141,6 +146,10 @@ export class Simulation {
         throwCharge: 0,
         path: [],
         botSabotaged: false,
+        stair: null,
+        hidePeek: false,
+        hideReturn: null,
+        hideAt: -10,
         pendingDoor: null,
         peeking: null,
         opening: null,
@@ -248,53 +257,125 @@ export class Simulation {
   }
 
   beginUse(p) {
-    if (p.status !== 'free' || p.climb || p.pendingDoor || p.peeking) return;
+    if (p.status !== 'free' || p.climb || p.stair || p.pendingDoor) return;
+    if (p.hidden) {
+      p.pendingDoor = { kind: 'hide', id: p.hidden, at: this.time };
+      return;
+    }
     const target = this.nearby(p);
+    if (p.dragging) {
+      if (target?.kind === 'hide' || target?.kind === 'door') this.interact(p.id);
+      else this.toggleDrag(p);
+      return;
+    }
+    if (target?.kind === 'hide' && this.bodies.some((b) => b.hidden === target.obj.id)) {
+      this.toggleDrag(p);
+      return;
+    }
+    const blood = this.nearestBlood(p);
+    const body = this.bodies.find(
+      (b) =>
+        !b.hidden &&
+        !b.draggedBy &&
+        b.f === p.f &&
+        distance(p, b) < 1.9 &&
+        lineClear(p.f, p, b, this.doorStates, false, false),
+    );
     if (
-      target?.kind === 'door' &&
-      !target.obj.window &&
-      !target.obj.patio &&
-      !p.hidden &&
-      !p.dragging
+      (blood || body) &&
+      (!target ||
+        Math.min(distance(p, blood || body), distance(p, body || blood)) <= target.dist + 0.05)
     ) {
-      p.pendingDoor = { id: target.obj.id, at: this.time };
-    } else this.interact(p.id);
+      p.pendingDoor = { kind: 'body', at: this.time, clean: false };
+      return;
+    }
+    if (target?.kind === 'door' && !target.obj.window && !target.obj.patio) {
+      p.pendingDoor = { kind: 'door', id: target.obj.id, at: this.time, crouch: !!p.input.crouch };
+      return;
+    }
+    if (target?.kind === 'door' && target.obj.window && this.doorStates[target.obj.id]) {
+      this.climbWindow(p);
+      return;
+    }
+    this.interact(p.id);
   }
   endUse(p, cancel = false) {
-    const pending = p.pendingDoor;
-    if (p.peeking && this.doorStates[p.peeking] === 'ajar') this.doorStates[p.peeking] = false;
-    const wasPeeking = !!p.peeking;
+    const pending = p.pendingDoor,
+      observing = !!p.peeking || !!p.hidePeek;
     p.peeking = null;
+    p.hidePeek = false;
     p.pendingDoor = null;
-    if (!cancel && pending && !wasPeeking && this.nearby(p)?.obj.id === pending.id)
+    if (pending?.kind === 'body') {
+      p.input.clean = false;
+      if (!cancel && !pending.clean) this.toggleDrag(p);
+      return;
+    }
+    if (cancel || !pending || observing || pending.done) return;
+    if (pending.kind === 'hide') {
       this.interact(p.id);
+      return;
+    }
+    if (this.nearby(p)?.obj.id === pending.id) this.interact(p.id);
   }
-  updatePeek(p, moving) {
+  updatePeek(p, moving, dt = 0.05) {
     const pending = p.pendingDoor;
     if (!pending) return false;
+    if (!p.input.use || p.status !== 'free' || moving) {
+      this.endUse(p, true);
+      return false;
+    }
+    const held = this.time - pending.at;
+    if (pending.kind === 'body') {
+      if (held > 0.35) {
+        pending.clean = true;
+        p.input.clean = true;
+        this.cleanBlood(p, dt, false);
+        return true;
+      }
+      return false;
+    }
+    if (pending.kind === 'hide') {
+      p.hidePeek = held > 0.35;
+      return true;
+    }
     const d = doors.find((d) => d.id === pending.id);
-    if (
-      !p.input.use ||
-      p.hidden ||
-      p.climb ||
-      p.status !== 'free' ||
-      !d ||
-      distance(p, d) > 1.9 ||
-      this.doorLocks[d.id] ||
-      moving
-    ) {
+    if (!d || distance(p, d) > 1.9 || this.brokenDoors[d.id]) {
       this.endUse(p, true);
       return false;
     }
-    if (this.time - pending.at >= 0.35 && this.doorStates[d.id] === false) {
-      this.doorStates[d.id] = 'ajar';
-      p.peeking = d.id;
-    }
-    if (p.peeking && this.doorStates[p.peeking] !== 'ajar') {
-      this.endUse(p, true);
-      return false;
+    if (held >= 0.45 && !pending.done) {
+      if (pending.crouch && !this.doorStates[d.id]) p.peeking = d.id;
+      else if (!pending.crouch) {
+        this.toggleLock(p);
+        pending.done = true;
+      }
     }
     return !!p.peeking;
+  }
+  beginStair(entity, s) {
+    entity.stair = {
+      fromF: entity.f,
+      toF: s.to,
+      fromX: entity.x,
+      fromZ: entity.z,
+      x: s.landing.x,
+      z: s.landing.z,
+      elapsed: 0,
+      duration: 1.4,
+    };
+    entity.f = s.to;
+    entity.x = s.landing.x;
+    entity.z = s.landing.z;
+    entity.moving = false;
+  }
+  breakDoor(id) {
+    if (this.brokenDoors[id]) return;
+    const d = doors.find((d) => d.id === id);
+    this.brokenDoors[id] = true;
+    this.doorStates[id] = true;
+    delete this.doorLocks[id];
+    this.noise(d.f, d.x, d.z, 18, 'La porte vole en éclats !');
+    this.event('door', 'Porte détruite : le passage reste ouvert.', { f: d.f, x: d.x, z: d.z });
   }
   interact(id) {
     const p = this.players.find((p) => p.id === id);
@@ -303,6 +384,13 @@ export class Simulation {
     if (p.climb) return;
     if (p.hidden) {
       p.hidden = null;
+      if (p.hideReturn) {
+        p.x = p.hideReturn.x;
+        p.z = p.hideReturn.z;
+        p.hideReturn = null;
+      }
+      p.hidePeek = false;
+      p.hideAt = this.time;
       p.invuln = Math.max(p.invuln, 0.4);
       if (p.input.run) this.noise(p.f, p.x, p.z, 8, 'Une sortie tout sauf discrète.', p.id);
       return;
@@ -313,10 +401,15 @@ export class Simulation {
     p.interactUntil = this.time + 0.55;
     if (kind === 'rescue') return;
     if (kind === 'door') {
+      if (this.brokenDoors[obj.id]) return;
       if (this.doorLocks[obj.id]) {
-        this.event('warning', 'Porte verrouillée · L pour déverrouiller depuis l’intérieur.', {
-          player: p.id,
-        });
+        this.event(
+          'warning',
+          'Porte verrouillée · maintenir E debout pour déverrouiller depuis l’intérieur.',
+          {
+            player: p.id,
+          },
+        );
         return;
       }
       if (obj.window && this.players.some((other) => other.climb?.window === obj.id)) return;
@@ -357,19 +450,21 @@ export class Simulation {
         this.bodies.some((b) => b.hidden === obj.id)
       )
         return;
+      p.hideReturn = { x: p.x, z: p.z };
       p.hidden = obj.id;
+      p.hidePeek = false;
+      p.hideAt = this.time;
       p.torch = false;
-      p.x = obj.x;
-      p.z = obj.z;
+      const hidingProp = props.find((prop) => prop.id === obj.prop);
+      p.x = hidingProp?.x ?? obj.x;
+      p.z = hidingProp?.z ?? obj.z;
       this.event('hide', 'Retenez votre souffle.', { player: p.id });
       for (const g of this.guards)
         if (g.f === p.f && g.target === p.id && lineClear(p.f, g, p, this.doorStates))
           g.sawHide = obj.id;
     }
     if (kind === 'stairs') {
-      p.f = obj.to;
-      p.x = obj.landing.x;
-      p.z = obj.landing.z;
+      this.beginStair(p, obj);
       p.hidden = null;
       this.event('stairs', `Direction ${FLOORS[p.f]}.`, {
         player: p.id,
@@ -378,6 +473,20 @@ export class Simulation {
     if (kind === 'device') {
       if (obj.type === 'light') {
         this.lightStates[obj.room] = !this.lightStates[obj.room];
+        if (!this.lightStates[obj.room] && this.power) {
+          const guest = this.guards.find(
+            (g) =>
+              g.alive !== false &&
+              g.f === obj.f &&
+              regionAt(g.f, g.x, g.z) === obj.room &&
+              !['chase', 'escort'].includes(g.state),
+          );
+          if (guest) {
+            guest.lightRepair = { device: obj.id, progress: 0 };
+            guest.path = [];
+            this.speak(guest, 'Qui a éteint la lumière ? Je vais la rallumer.', true);
+          }
+        }
         this.event(
           'switch',
           !this.power
@@ -442,6 +551,7 @@ export class Simulation {
           obj.f === p.f &&
           distance(p, obj) < range &&
           (kind !== 'stairs' || obj.to !== null) &&
+          (kind !== 'door' || !this.brokenDoors[obj.id]) &&
           lineClear(
             p.f,
             p,
@@ -532,7 +642,7 @@ export class Simulation {
           ].includes(region),
       )
       .sort((a, b) => distance(p, a) - distance(p, b))[0];
-    if (!d) return;
+    if (!d || this.brokenDoors[d.id]) return;
     const lock = this.doorLocks[d.id];
     if (lock && lock.region !== region) return;
     if (lock) delete this.doorLocks[d.id];
@@ -590,18 +700,21 @@ export class Simulation {
     return moved;
   }
   canSee(g, p) {
-    if (g.alive === false || g.f !== p.f || p.status !== 'free' || p.hidden) return false;
-    if (
-      p.peeking &&
-      !p.torch &&
-      this.doorStates[p.peeking] === 'ajar' &&
-      regionAt(g.f, g.x, g.z) !== regionAt(p.f, p.x, p.z)
-    )
-      return false;
-    const d = distance(g, p),
-      r = roomAt(p.f, p.x, p.z),
-      lit = this.power && (!r || this.lightStates[r.id]);
-    const range = (lit ? 8 : 4.6) * (p.input.crouch ? 0.65 : 1) + (p.torch ? 4 : 0);
+    if (g.alive === false || g.f !== p.f || p.status !== 'free') return false;
+    if (p.hidden) {
+      if (!p.hidePeek) return false;
+      return this.canSee(g, { ...peekView(p, this.doorStates), hidden: null, hidePeek: false });
+    }
+    const d = distance(g, p);
+    const facingTo = Math.atan2(p.x - g.x, p.z - g.z);
+    const beam =
+      g.armed === true &&
+      d < 8 &&
+      Math.abs(Math.atan2(Math.sin(facingTo - g.angle), Math.cos(facingTo - g.angle))) < 0.5;
+    const lit = illuminationAt(p, this.lightStates, this.power) > 0.18 || p.torch || beam;
+    if (!lit) return false;
+    if (inBush(p) && p.input?.crouch && !p.torch && d > 1.2) return false;
+    const range = 8 * (p.input?.crouch ? 0.65 : 1) + (p.torch ? 4 : 0);
     if (d > range) return false;
     const facing = Math.atan2(p.x - g.x, p.z - g.z),
       angle = Math.atan2(Math.sin(facing - g.angle), Math.cos(facing - g.angle));
@@ -740,7 +853,7 @@ export class Simulation {
       body.hidden = null;
       body.draggedBy = p.id;
       p.dragging = body.id;
-      this.event('drag', 'Vous traînez le corps. R pour le déposer.', { player: p.id });
+      this.event('drag', 'Vous traînez le corps. E pour le déposer.', { player: p.id });
     }
   }
   addBlood(point, size = 0.23) {
@@ -828,6 +941,11 @@ export class Simulation {
     }
     const intruder = this.players.find((p) => this.canSee(g, p));
     if (intruder) {
+      if (intruder.hidden) {
+        g.sawHide = intruder.hidden;
+        this.raiseAlarm(g, intruder, true);
+        return;
+      }
       if (g.challenge?.player !== intruder.id) {
         g.challenge = { player: intruder.id, at: this.time, x: intruder.x, z: intruder.z };
         this.speak(g, 'Tu es invité, toi ? Pourquoi ce masque ?');
@@ -991,6 +1109,26 @@ export class Simulation {
     }
   }
   updateRepair(g, dt) {
+    if (g.lightRepair) {
+      const d = devices.find((d) => d.id === g.lightRepair.device);
+      if (!d || !this.power || this.lightStates[d.room]) {
+        g.lightRepair = null;
+        return false;
+      }
+      g.state = 'repair';
+      this.navigate(g, d, dt, 1.4);
+      if (g.f === d.f && distance(g, d) < 1.2) {
+        g.lightRepair.progress += dt;
+        if (g.lightRepair.progress >= 1.5) {
+          this.lightStates[d.room] = true;
+          g.lightRepair = null;
+          g.path = [];
+          this.speak(g, 'Voilà, on y voit mieux.', true);
+          this.event('switch', 'Un invité rallume la pièce.', { f: d.f, x: d.x, z: d.z });
+        }
+      }
+      return true;
+    }
     if (g.repair) {
       const d = devices.find((d) => d.id === g.repair.device);
       if (!d || this.power) {
@@ -1219,6 +1357,7 @@ export class Simulation {
     );
   }
   updateGuard(g, dt) {
+    if (g.stair) return;
     if (g.alive === false) return;
     if (this.phase === 'infiltration') {
       this.updateGuest(g, dt);
@@ -1278,6 +1417,7 @@ export class Simulation {
             ally.search = 7;
           }
       }
+      if (p.hidden) g.sawHide = p.hidden;
       g.state = 'chase';
       g.target = p.id;
       g.last = { x: p.x, z: p.z, f: p.f };
@@ -1414,9 +1554,7 @@ export class Simulation {
       if (!s) return;
       dest = s;
       if (distance(g, s) < 0.65) {
-        g.f = s.to;
-        g.x = s.landing.x;
-        g.z = s.landing.z;
+        this.beginStair(g, s);
         g.path = [];
         g.pathAt = 0;
         return;
@@ -1429,11 +1567,45 @@ export class Simulation {
       distance(g.pathEnd, dest) > 1
     ) {
       g.path = pathfind(g.f, g, dest, this.doorStates);
+      const locked = Object.keys(this.doorLocks);
+      if (locked.length) {
+        const alternate = pathfind(g.f, g, dest, this.doorStates, locked);
+        const cost = (path) => path.reduce((n, p, i) => n + distance(i ? path[i - 1] : g, p), 0);
+        if (alternate.length && cost(alternate) <= cost(g.path) + 8) g.path = alternate;
+      }
       g.pathAt = this.time;
       g.pathEnd = { ...dest };
     }
     const next = g.path[0];
     if (!next) return;
+    const locked = doors.find(
+      (d) =>
+        this.doorLocks[d.id] &&
+        d.f === g.f &&
+        distance(g, d) < 1.65 &&
+        g.path.slice(0, 5).some((p) => distance(p, d) < 0.55),
+    );
+    if (locked) {
+      if (this.phase === 'playing') {
+        if (g.bashing?.door !== locked.id) {
+          g.bashing = { door: locked.id, progress: 0 };
+          this.speak(g, 'Ouvre ! Sinon on défonce la porte !', true);
+        }
+        g.bashing.progress += dt;
+        const knock = Math.floor(g.bashing.progress);
+        if (knock > (g.bashing.knock ?? -1)) {
+          g.bashing.knock = knock;
+          this.noise(locked.f, locked.x, locked.z, 10, 'BOUM ! Ils frappent la porte.');
+        }
+        if (g.bashing.progress >= 5) {
+          this.breakDoor(locked.id);
+          g.bashing = null;
+          g.path = [];
+        }
+      }
+      return;
+    }
+    g.bashing = null;
     for (const d of doors)
       if (!d.window && d.f === g.f && distance(g, d) < 1.6 && !this.doorLocks[d.id])
         this.doorStates[d.id] = true;
@@ -1463,17 +1635,6 @@ export class Simulation {
           lock.player,
         );
       }
-      if (age > 45) {
-        delete this.doorLocks[id];
-        this.noise(
-          d.f,
-          d.x,
-          d.z,
-          16,
-          'La serrure cède : impossible de rester barricadé.',
-          lock.player,
-        );
-      }
     }
 
     if (!['intro', 'playing', 'infiltration'].includes(this.phase)) return;
@@ -1493,6 +1654,11 @@ export class Simulation {
       }
     this.noises = this.noises.filter((n) => this.time - n.at < 2.5);
     this.thrown = this.thrown.filter((n) => this.time - n.at < 3);
+    for (const entity of [...this.players, ...this.guards])
+      if (entity.stair) {
+        entity.stair.elapsed += dt;
+        if (entity.stair.elapsed >= entity.stair.duration) entity.stair = null;
+      }
     for (const p of this.players) {
       p.invuln = Math.max(0, p.invuln - dt);
       p.attackCooldown = Math.max(0, (p.attackCooldown || 0) - dt);
@@ -1511,6 +1677,7 @@ export class Simulation {
         continue;
       }
       if (p.status !== 'free') continue;
+      if (p.stair) continue;
       if (p.climb) {
         const c = p.climb;
         c.elapsed += dt;
@@ -1528,11 +1695,30 @@ export class Simulation {
         continue;
       }
       p.angle = p.input.angle || 0;
-      if (p.hidden) continue;
+      if (p.hidden) {
+        this.updatePeek(p, false, dt);
+        continue;
+      }
       const inp = p.input,
         length = Math.hypot(inp.x || 0, inp.z || 0),
         moving = length > 0.05;
-      if (this.updatePeek(p, moving)) {
+      const automaticStair =
+        moving &&
+        !p.dragging &&
+        stairs.find(
+          (s) =>
+            s.f === p.f &&
+            distance(p, s) < 0.85 &&
+            ((s.landing.x - s.x) * inp.x + (s.landing.z - s.z) * inp.z) /
+              Math.max(0.01, distance(s, s.landing) * length) >
+              0.6,
+        );
+      if (automaticStair) {
+        this.endUse(p, true);
+        this.beginStair(p, automaticStair);
+        continue;
+      }
+      if (this.updatePeek(p, moving, dt)) {
         p.moving = false;
         p.running = false;
         continue;
@@ -1657,6 +1843,7 @@ export class Simulation {
       guards: this.guards.map(({ path, pathEnd, goal, ...g }) => g),
       doors: this.doorStates,
       doorLocks: this.doorLocks,
+      brokenDoors: this.brokenDoors,
       lights: this.lightStates,
       noises: this.noises,
       events: this.events,

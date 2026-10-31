@@ -306,6 +306,7 @@ test('every hide can be entered and left; darkness reduces detection and lamps r
   Object.assign(g, { f: 1, x: -16, z: -9, angle: Math.PI / 2 });
   Object.assign(p, { f: 1, x: -10, z: -9, input: {}, torch: false });
   assert.equal(s.canSee(g, p), true);
+  g.armed = false; // No flashlight beam: the room is genuinely dark.
   s.lightStates['r1-0'] = false;
   assert.equal(s.canSee(g, p), false);
   p.torch = true;

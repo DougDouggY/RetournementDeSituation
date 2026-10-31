@@ -57,18 +57,19 @@ try {
   const moved = await page.evaluate(() => window.__RDS.state.players[0]);
   assert.ok(moved.x > first.x + 2);
   assert.ok(Math.abs(moved.z - first.z) < 0.3);
+  await page.keyboard.down('ShiftLeft');
+  await page.waitForFunction(() => window.__RDS.state.players[0].crouching);
   await page.keyboard.down('KeyE');
-  await page.waitForFunction(() => window.__RDS.state.doors['entry-west'] === 'ajar');
-  await page.waitForFunction(
-    () => Math.abs(window.__RDS.doorLeaves['entry-west'].angle - Math.PI / 5) < 0.02,
-  );
+  await page.waitForFunction(() => window.__RDS.state.players[0].peeking === 'entry-west');
+  await page.waitForFunction(() => Math.abs(window.__RDS.doorLeaves['entry-west'].angle) < 0.02);
   assert.equal(await page.evaluate(() => window.__RDS.doorLeaves['entry-west'].opaque), true);
   const bodyBeforePeek = await page.evaluate(() => window.__RDS.state.players[0].x);
   assert.ok(await page.evaluate(() => window.__RDS.eye.x > window.__RDS.state.players[0].x));
   await page.screenshot({ path: 'test-results/held-e-peek.png' });
   assert.equal(await page.evaluate(() => window.__RDS.state.players[0].x), bodyBeforePeek);
   await page.keyboard.up('KeyE');
-  await page.waitForFunction(() => window.__RDS.state.doors['entry-west'] === false);
+  await page.keyboard.up('ShiftLeft');
+  await page.waitForFunction(() => !window.__RDS.state.players[0].peeking);
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() => window.__RDS.state.doors['entry-west'] === true);
   await page.keyboard.press('KeyE');
@@ -85,7 +86,7 @@ try {
     'room illumination must not depend on window proximity',
   );
   await page.screenshot({ path: 'test-results/office-window-permanently-lit.png' });
-  await page.keyboard.press('KeyV');
+  await page.keyboard.press('KeyE');
   await page.waitForFunction(
     () => window.__RDS.state.players[0].x > -25 && !window.__RDS.state.players[0].climb,
   );
@@ -121,15 +122,87 @@ try {
   );
   await page.keyboard.press('KeyF');
   await page.waitForFunction(() => window.__RDS.state.players[0].torch);
-  await page.keyboard.down('KeyC');
+  await page.keyboard.down('ShiftLeft');
   await page.waitForFunction(() => window.__RDS.eye.y < 1.1);
-  await page.keyboard.up('KeyC');
-  await page.keyboard.down('KeyG');
+  await page.keyboard.up('ShiftLeft');
+  await page.mouse.move(650, 400);
+  await page.mouse.down({ button: 'right' });
   await page.waitForFunction(
     () => window.__RDS.state.players[0].throwCharge > 0.3 && window.__RDS.aimVisible,
   );
-  await page.keyboard.up('KeyG');
+  await page.mouse.up({ button: 'right' });
   await page.waitForFunction(() => window.__RDS.state.players[0].bottles === 2);
+  // Reach the office wardrobe using only movement and E.
+  const move = async (key, predicate) => {
+    await page.keyboard.down(key);
+    await page.waitForFunction(predicate, null, { polling: 50 });
+    await page.keyboard.up(key);
+  };
+  await move('KeyS', () => window.__RDS.state.players[0].x < -12.35);
+  await move('KeyA', () => window.__RDS.state.players[0].z < 2.5);
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(() => !!window.__RDS.state.players[0].hidden);
+  await page.waitForFunction(
+    () => document.querySelector('#observation-mask').className === 'cabinet-closed-mask',
+  );
+  await page.screenshot({ path: 'test-results/wardrobe-inside.png' });
+  await page.keyboard.down('KeyE');
+  await page.waitForFunction(() => window.__RDS.state.players[0].hidePeek);
+  await page.waitForFunction(() =>
+    Object.values(window.__RDS.cabinets).some((angles) => angles.some((v) => Math.abs(v) > 0.1)),
+  );
+  await page.screenshot({ path: 'test-results/wardrobe-peek.png' });
+  await page.keyboard.up('KeyE');
+  await page.waitForFunction(() => !window.__RDS.state.players[0].hidePeek);
+  assert.ok(await page.evaluate(() => !!window.__RDS.state.players[0].hidden));
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(() => !window.__RDS.state.players[0].hidden);
+  await move('KeyD', () => window.__RDS.state.players[0].z > 8);
+  await move('KeyW', () => window.__RDS.state.players[0].x > -10.6);
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(() => window.__RDS.state.doors['d1-3']);
+  await move('KeyW', () => window.__RDS.state.players[0].x > -8);
+  await move('KeyD', () => window.__RDS.state.players[0].z > 9.9);
+  await move('KeyW', () => window.__RDS.state.players[0].x > -3.3);
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(() => window.__RDS.state.players[0].f === 2);
+  await page.waitForFunction(
+    () => !window.__RDS.state.players[0].stair && window.__RDS.eye.y > 4.7,
+  );
+  assert.equal(await page.evaluate(() => window.__RDS.floorHeights[2]), 3.2);
+  assert.ok(
+    await page.evaluate(() => window.__RDS.visibleFloors[1] && window.__RDS.visibleFloors[2]),
+  );
+  await page.screenshot({ path: 'test-results/complete-stairs-upstairs.png' });
+  await page.keyboard.press('F2');
+  await page.waitForFunction(
+    () =>
+      window.__RDS.viewMode === 'top' &&
+      window.__RDS.visibleFloors[1] &&
+      window.__RDS.visibleFloors[2],
+  );
+  await page.screenshot({ path: 'test-results/upper-floor-openings-top.png' });
+  await page.keyboard.press('F2');
+  await page.waitForFunction(() => window.__RDS.viewMode === 'first-person');
+  await move('KeyA', () => window.__RDS.state.players[0].z < -4);
+  await move('KeyW', () => window.__RDS.state.players[0].x > -1.7);
+  await page.locator('#fps-look').click();
+  await page.waitForFunction(() => !!document.pointerLockElement);
+  await page.mouse.move(400, 500);
+  await page.mouse.move(400, 650);
+  await page.screenshot({ path: 'test-results/atrium-ground-floor-visible.png' });
+  await page.keyboard.press('Escape');
+  await page.locator('#settings-close').click();
+  await move('KeyS', () => window.__RDS.state.players[0].x < -3);
+  await move('KeyD', () => window.__RDS.state.players[0].z > 5.8);
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(() => window.__RDS.state.players[0].f === 1);
+  await page.waitForFunction(
+    () => !window.__RDS.state.players[0].stair && window.__RDS.eye.y < 1.8,
+  );
+  console.log(
+    'PASS E wardrobe entry/peek/exit, full ascending/descending stairs, elevated floor and atrium view',
+  );
   const before = await page.evaluate(() => window.__RDS.eye.yaw);
   await page.locator('#fps-look').click();
   await page.waitForFunction(() => !!document.pointerLockElement);

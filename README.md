@@ -56,21 +56,21 @@ L’archive `retournement-de-situation-solo.zip` contient le site statique : ell
 | Commande | Action |
 | --- | --- |
 | ZQSD, WASD ou flèches | Se déplacer |
-| Souris | Orienter le personnage et sa lampe |
-| Maj | Courir (endurance limitée, bruit audible) |
-| Ctrl ou C | S’accroupir |
-| E | Porte, cachette, escalier, interrupteur ou objet à proximité |
-| Maintenir E 2 secondes | Déverrouiller discrètement une fenêtre extérieure |
-| V | Escalader une fenêtre ouverte, pour entrer ou sortir |
-| Espace | Éliminer un invité isolé à moins de 1,6 m |
-| R | Prendre / déposer un corps à proximité ; déplacements ralentis en le traînant |
-| E avec un corps près d’une cachette | Dissimuler le cadavre (R pour le ressortir) |
-| Maintenir X 3 secondes, immobile | Nettoyer une petite zone de sang ; relâcher ou bouger annule la progression |
-| Maintenir E 2,5 secondes | Détacher un partenaire capturé à proximité |
+| Shift maintenu | S’accroupir et avancer discrètement |
+| E bref | Porte, objet, cachette, escalier, fenêtre ouverte, prendre/déposer un corps |
+| E maintenu près du sang | Nettoyer (3 secondes) |
+| E maintenu devant une fenêtre fermée | Déverrouiller (2 secondes), puis E pour escalader |
+| Accroupi + E maintenu devant une porte fermée | Observer au trou de serrure, sans ouvrir la porte |
+| Debout + E maintenu devant une porte, depuis la pièce | Verrouiller/déverrouiller |
+| E maintenu depuis une cachette | Entrouvrir et observer ; un invité face à l’ouverture peut vous repérer |
+| Clic gauche | Éliminer une cible isolée à portée |
+| Clic droit maintenu, puis relâché | Charger puis lancer une bouteille ; deux secondes pour la portée maximale |
 | F | Lampe torche |
-| Maintenir G, puis relâcher | Afficher la trajectoire et charger la portée (maximum après 2 s, jusqu’à 12 m), puis lancer |
-| Tab | État de l’équipe et rappel des règles |
-| Échap | Paramètres (la nuit continue en ligne) |
+| Espace maintenu | Courir, avec davantage de bruit |
+| F2 | Changer de vue dans la même partie |
+| Tab / Échap | État de la nuit / paramètres |
+
+Les anciennes touches C/Ctrl, G, V, R, X et L restent des raccourcis secondaires. Les actions principales utilisent E et la souris ; il n’est pas nécessaire de mémoriser tous ces raccourcis.
 
 Les étiquettes au sol identifient les pièces ; l’escalier principal se trouve dans le hall et l’escalier de service près de la cuisine. Les deux ont leur propre palier à l’étage. Approcher les bouteilles, réveils, télévisions et interrupteurs pour les utiliser. Éteindre la lampe et s’accroupir réduit la détection. Une cachette peut être fouillée : une entrée vue par un poursuivant est particulièrement dangereuse.
 
@@ -201,3 +201,18 @@ Les pièces alimentées restent éclairées en permanence, même vues de loin pa
 **Appuyer brièvement sur E** ouvre ou ferme une porte simple. **Maintenir E** entrouvre une porte fermée après 0,35 seconde et permet de regarder discrètement depuis la fente, sans déplacer le personnage ni traverser l’ouverture. **Relâcher E** referme immédiatement. Bouger ou ouvrir les paramètres annule l’observation. La touche B n’est plus utilisée. La discrétion vaut face aux invités de l’autre côté du battant, lampe éteinte ; un invité du même côté peut toujours voir le joueur. Une porte verrouillée ne peut pas être entrouverte.
 
 Les portes simples mesurent maintenant un mètre de large et 2,7 mètres de haut. Les ouvertures des murs, encadrements, collisions et chemins utilisent la même nouvelle largeur. Les fenêtres et les grandes portes-fenêtres doubles gardent leurs dimensions et leurs commandes.
+
+
+## Version 0.9.0 — infiltration, cachettes et étage visible
+
+Le chemin d’entrée laisse entendre la musique de la terrasse. Des buissons traversables forment une approche à l’ouest et autour du jardin : accroupi dans leur feuillage, le joueur est dissimulé sauf à très courte portée ou avec sa lampe allumée. La vision des invités dépend des zones réellement éclairées et de leur orientation ; un joueur dans le noir n’est pas détecté visuellement, sauf si un faisceau l’éclaire. Les bruits restent audibles indépendamment de la visibilité. L’indicateur de discrétion distingue ombre, lumière et camouflage.
+
+Les portes restent fermées pendant l’observation au trou de serrure. Le regard traverse une petite ouverture masquée à l’écran ; le corps reste devant la porte. Depuis la vue du dessus aussi, observer passe temporairement au point de vue intérieur puis revient à la vue choisie au relâchement ou à la sortie de cachette. Depuis une armoire, un appui bref sur E entre/sort, tandis qu’un maintien ouvre partiellement les battants pour observer. L’armoire possède un intérieur et des battants animés. Regarder dehors expose l’occupant aux invités qui regardent son ouverture.
+
+L’étage est situé à 3,2 mètres du rez-de-chaussée. Les deux escaliers comportent seize marches complètes, avec des rambardes et une transition visible de montée/descente. Avancer dans l’axe de la volée emprunte automatiquement l’escalier ; E reste disponible. Les trémies bloquent les déplacements latéraux dans le vide. Le vide central et les trémies laissent voir le niveau inférieur dans les deux vues. La maçonnerie remplace la bande au-dessus des portes.
+
+Un invité disponible dans une pièce dont la lumière est coupée réagit, rejoint l’interrupteur et rallume. En alerte, les poursuivants privilégient un détour court s’il est accessible ; sinon, ils frappent la porte pendant cinq secondes et la détruisent. Le battant détruit disparaît définitivement pour cette manche et ne peut plus être verrouillé. Une porte ne se détruit plus toute seule après un délai.
+
+Les personnages ne sont plus entièrement masqués par le bar en première personne : les meubles occultent uniquement leur géométrie. Les déplacements de caméra sont lissés, les faces intérieures regroupées pour réduire les appels de rendu et la résolution s’adapte après plusieurs secondes de faible cadence. La fluidité réelle reste dépendante du matériel et du navigateur.
+
+Jeu publié : https://retournement-de-situation-solo.jeferson-patry-sin.workers.dev/

@@ -102,6 +102,7 @@ test('guests do not see behind themselves even at close distance, or through clo
   const s = solo(),
     p = s.players[0],
     g = s.guards[0];
+  p.torch = true;
   Object.assign(g, { f: 1, x: -34, z: 8, angle: 0 });
   Object.assign(p, { f: 1, x: -34, z: 7 });
   assert.equal(s.canSee(g, p), false);

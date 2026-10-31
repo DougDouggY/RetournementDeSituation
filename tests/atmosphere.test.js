@@ -26,29 +26,29 @@ test('nearby voices fade with distance, stop between floors and attenuate behind
   );
 });
 
-test('tap E opens normally; holding E peeks only until release and respects locks', () => {
+test('tap E opens normally; holding E crouched looks through a closed keyhole until release', () => {
   const s = new Simulation();
   s.addPlayer('p');
   s.start(true);
   const p = s.players[0];
   Object.assign(p, { f: 1, x: -26.1, z: -1 });
-  s.setInput('p', { use: true });
+  s.setInput('p', { use: true, crouch: true });
   s.action('p', 'beginUse');
   assert.equal(s.doorStates['entry-west'], false, 'the initial press must not reveal the room');
   s.action('p', 'endUse');
   assert.equal(s.doorStates['entry-west'], true);
   s.action('p', 'interact');
   s.action('p', 'beginUse');
-  s.time += 0.4;
+  s.time += 0.5;
   s.updatePeek(p, false);
-  assert.equal(s.doorStates['entry-west'], 'ajar');
+  assert.equal(s.doorStates['entry-west'], false);
   assert.equal(p.peeking, 'entry-west');
   s.action('p', 'endUse');
   assert.equal(s.doorStates['entry-west'], false);
   assert.equal(p.peeking, null);
   s.doorLocks['entry-west'] = { region: 'hall1' };
   s.action('p', 'beginUse');
-  s.time += 0.4;
+  s.time += 0.5;
   s.updatePeek(p, false);
   assert.equal(s.doorStates['entry-west'], false);
 });
@@ -67,18 +67,18 @@ test('narrow ajar doors permit sight through the slit but block every body cross
   assert.equal(blocked(1, -25, -1, { [d.id]: true }, 0.32), false);
 });
 
-test('peeking provides an interior view without exposing the body, and cancels on movement', () => {
+test('the closed keyhole provides an interior view without exposing the body, and cancels on movement', () => {
   const s = new Simulation();
   s.addPlayer('p');
   s.start(true);
   const p = s.players[0];
   Object.assign(p, { f: 1, x: -26.1, z: -1 });
-  s.setInput('p', { use: true });
+  s.setInput('p', { use: true, crouch: true });
   s.action('p', 'beginUse');
-  s.time += 0.4;
+  s.time += 0.5;
   s.updatePeek(p, false);
   const eye = peekView(p, s.doorStates);
-  assert.ok(eye.x > p.x && eye.x < -25);
+  assert.ok(eye.x > -25 && p.x < -25);
   assert.ok(canObserve(p, { f: 1, x: -24, z: -1.35 }, s.doorStates));
   const guard = s.guards[0];
   Object.assign(guard, { f: 1, x: -24, z: -1.35, angle: -Math.PI / 2 });
@@ -87,6 +87,7 @@ test('peeking provides an interior view without exposing the body, and cancels o
   assert.equal(s.doorStates['entry-west'], false);
   assert.equal(p.peeking, null);
   s.doorStates['entry-west'] = true;
+  p.torch = true;
   assert.equal(s.canSee(guard, p), true, 'the player becomes visible through a fully open door');
 });
 

@@ -3,6 +3,7 @@
 export const FLOOR_IDS = [1, 2];
 export const FLOORS = { 1: 'Rez-de-chaussée', 2: 'Étage' };
 export const NIGHT = 540;
+export const FLOOR_HEIGHT = 3.2;
 export const WORLD = { minX: -38, maxX: 38, minZ: -43, maxZ: 28 };
 export const HOUSE = { minX: -25, maxX: 25, minZ: -16, maxZ: 16 };
 export const POOL = { f: 1, x: 4, z: -33, w: 20, d: 8 };
@@ -191,6 +192,14 @@ stairs.push(
     axis: 'z',
   },
 );
+export const stairVoids = stairs
+  .filter((s) => s.to === 2)
+  .map((s) => ({
+    x: s.x,
+    z: (s.z + s.landing.z) / 2,
+    w: 2.3,
+    d: Math.max(0.8, Math.abs(s.z - s.landing.z) - 1),
+  }));
 export function houseContains(f, x, z) {
   if (
     !FLOOR_IDS.includes(f) ||
@@ -379,6 +388,37 @@ for (const [x, z] of [
   [29, 18],
 ])
   prop(1, 'outside', 'plant', x, z, 1.2, 1.2);
+// A continuous infiltration route, kept away from doors, stairs and the starting path.
+export const bushes = [];
+for (const [x, z, w, d] of [
+  [-32, -8, 3, 5],
+  [-32, -16, 3, 5],
+  [-29, -22, 3, 4],
+  [-26, -27, 4, 3],
+  [-21, -28, 4, 2],
+  [-16, -28, 3, 2],
+  [27, -25, 3, 4],
+  [31, -12, 3, 5],
+  [31, 3, 3, 4],
+  [-29, 17, 4, 3],
+]) {
+  bushes.push(prop(1, 'outside', 'bush', x, z, w, d, { solid: false, occludes: false }));
+}
+export function inBush(p) {
+  return p.f === 1 && bushes.some((b) => inside(p.x, p.z, b));
+}
+export function illuminationAt(p, lights = {}, power = true) {
+  if (!power) return 0;
+  const region = regionAt(p.f, p.x, p.z);
+  if (region !== 'outside') return lights[region] === false ? 0 : 1;
+  const sources = [
+    ...gardenLamps.map((l) => ({ ...l, r: 3.8 })),
+    ...[-21, -9, 9, 21].map((x) => ({ x, z: -19, r: 5.5 })),
+    { x: -5, z: -22, r: 6 },
+    { x: 0, z: 17, r: 4 },
+  ];
+  return Math.max(0, ...sources.map((s) => Math.max(0, 1 - distance(p, s) / s.r)));
+}
 export function distance(a, b) {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
@@ -438,7 +478,8 @@ export function blocked(f, x, z, doorStates = {}, radius = 0.32, ignoreDoors = f
   } else if (
     !houseContains(f, x - radius, z - radius) ||
     !houseContains(f, x + radius, z + radius) ||
-    inside(x, z, ATRIUM, radius)
+    inside(x, z, ATRIUM, radius) ||
+    stairVoids.some((h) => inside(x, z, h, radius))
   )
     return true;
   return (
@@ -499,7 +540,13 @@ function navigationBlocked(f, x, z) {
   if (!navigationCells.has(key)) navigationCells.set(key, blocked(f, x / 2, z / 2, {}, 0.35, true));
   return navigationCells.get(key);
 }
-export function pathfind(f, start, end, states = {}) {
+export function pathfind(f, start, end, states = {}, avoid = []) {
+  const impassable = (x, z) =>
+    navigationBlocked(f, x, z) ||
+    avoid.some((id) => {
+      const d = doors.find((d) => d.id === id);
+      return d?.f === f && inside(x / 2, z / 2, d, 0.35);
+    });
   const scale = 2,
     key = (x, z) => `${x},${z}`;
   function nearest(p) {
@@ -569,9 +616,8 @@ export function pathfind(f, start, end, states = {}) {
         nk = key(nx, nz),
         ng = cur.g + Math.hypot(dx, dz);
       if (seen.has(nk) && seen.get(nk) <= ng) continue;
-      if (navigationBlocked(f, nx, nz)) continue;
-      if (dx && dz && (navigationBlocked(f, cur.x, nz) || navigationBlocked(f, nx, cur.z)))
-        continue;
+      if (impassable(nx, nz)) continue;
+      if (dx && dz && (impassable(cur.x, nz) || impassable(nx, cur.z))) continue;
       seen.set(nk, ng);
       parent.set(nk, ck);
       push({ x: nx, z: nz, g: ng, h: Math.hypot(ex - nx, ez - nz) });
@@ -590,14 +636,28 @@ export function pathfind(f, start, end, states = {}) {
 }
 
 export function peekView(viewer, states = {}) {
+  if (viewer.hidden && viewer.hidePeek) {
+    const hide = hides.find((h) => h.id === viewer.hidden),
+      prop = props.find((p) => p.id === hide?.prop);
+    const angle = prop?.rotation || 0;
+    return {
+      ...viewer,
+      x:
+        viewer.x +
+        Math.sin(angle) * ((Math.abs(Math.sin(angle)) > 0.5 ? prop?.w : prop?.d || 1) / 2 + 0.2),
+      z:
+        viewer.z +
+        Math.cos(angle) * ((Math.abs(Math.sin(angle)) > 0.5 ? prop?.w : prop?.d || 1) / 2 + 0.2),
+      hidden: null,
+    };
+  }
   const d = doors.find((d) => d.id === viewer.peeking && d.f === viewer.f);
-  if (!d || states[d.id] !== 'ajar' || distance(viewer, d) > 1.9) return viewer;
-  const width = d.axis === 'z' ? d.d : d.w;
+  if (!d || states[d.id] || distance(viewer, d) > 1.9) return viewer;
   const side = Math.sign(d.axis === 'z' ? viewer.x - d.x : viewer.z - d.z) || 1;
   return {
     ...viewer,
-    x: d.x + (d.axis === 'z' ? side * 0.18 : width * 0.35),
-    z: d.z + (d.axis === 'z' ? -width * 0.35 : side * 0.18),
+    x: d.x + (d.axis === 'z' ? -side * 0.22 : d.w * 0.35),
+    z: d.z + (d.axis === 'x' ? -side * 0.22 : -d.d * 0.35),
   };
 }
 export function visibleRegions(viewer, states = {}) {
@@ -640,7 +700,7 @@ export function canObserve(viewer, point, states = {}, regions = visibleRegions(
   return (
     viewer.f === point.f &&
     regions.has(regionAt(point.f, point.x, point.z)) &&
-    lineClear(point.f, viewer, point, states)
+    lineClear(point.f, viewer, point, states, true)
   );
 }
 
@@ -674,7 +734,17 @@ export function windowLanding(p, d, states = {}) {
 // Access points face usable floor space rather than the wall behind the furniture.
 for (const h of hides) {
   const p = props.find((p) => p.id === h.prop);
+  const angle = p.rotation || 0,
+    depth = Math.abs(Math.sin(angle)) > 0.5 ? p.w : p.d;
   const candidates = [
+    ...(h.kind === 'wardrobe'
+      ? [
+          {
+            x: p.x + Math.sin(angle) * (depth / 2 + 0.65),
+            z: p.z + Math.cos(angle) * (depth / 2 + 0.65),
+          },
+        ]
+      : []),
     { x: p.x, z: p.z + p.d / 2 + 0.65 },
     { x: p.x, z: p.z - p.d / 2 - 0.65 },
     { x: p.x - p.w / 2 - 0.65, z: p.z },
