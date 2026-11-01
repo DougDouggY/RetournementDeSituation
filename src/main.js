@@ -4,7 +4,7 @@ import '@fontsource/dm-sans/latin-400.css';
 import '@fontsource/dm-sans/latin-600.css';
 import './style.css';
 import { GameScene } from './scene.js';
-import { Sound, proximityGain } from './audio.js';
+import { Sound, voiceGain } from './audio.js';
 import {
   FLOORS,
   illuminationAt,
@@ -394,7 +394,7 @@ function updateUI() {
     state.observer
       ? 'Observation : le tueur est contrôlé par une IA. Les boutons affichent chaque niveau sans masquage des pièces. La lumière d’observation ne modifie pas les lumières ni la détection du jeu. Vitesse ×1, ×2 ou ×4 ; Échap pour suspendre la simulation. Le plan exact des deux niveaux se trouve dans les plans de la maison.'
       : state.mode === 'solo'
-        ? 'Entrez depuis le jardin. Shift : accroupi. E : porte, cachette, escalier, fenêtre ouverte et corps. Maintenir E : nettoyer le sang, ouvrir une fenêtre ou observer depuis une cachette. Accroupi + E maintenu devant une porte : trou de serrure ; debout depuis la pièce : verrou. Clic gauche : éliminer une cible isolée. Clic droit maintenu puis relâché : bouteille. F : lampe ; Espace : courir. Ombre et buissons dissimulent ; lumière, bruit et indices peuvent vous trahir. Échap : pause.'
+        ? 'Entrez depuis le jardin. Shift : accroupi. E : porte, cachette, escalier, fenêtre ouverte et corps. Maintenir E : nettoyer le sang, ouvrir une fenêtre ou observer depuis une cachette. Accroupi + E maintenu devant une porte : trou de serrure ; debout depuis la pièce : verrou. Clic gauche : éliminer une cible isolée. Clic droit maintenu puis relâché : bouteille. B : entrouvrir/refermer une porte. F : lampe ; Espace : courir. Ombre et buissons dissimulent ; lumière, bruit et indices peuvent vous trahir. Échap : pause.'
         : 'Shift : accroupi. E : actions de proximité ; maintenir E : fenêtre, nettoyage, serrure ou sauvetage. Clic gauche : cible isolée. Clic droit maintenu puis relâché : bouteille. F : lampe ; Espace : courir. Les bruits attirent les invités ; les preuves déclenchent la chasse.',
   );
   const secs = Math.ceil(state.remaining);
@@ -530,7 +530,7 @@ function updateUI() {
       lastToastAt = performance.now();
       $('#toast').classList.add('show');
     }
-    if (e.type === 'voice' && proximityGain(e, me, state.doors) >= 0.025) {
+    if (e.type === 'voice' && voiceGain(e, me, state.doors) >= 0.025) {
       setText('#dialogue', e.text);
       $('#dialogue').classList.add('show');
       setTimeout(() => $('#dialogue').classList.remove('show'), 3200);
@@ -663,7 +663,7 @@ function interaction(p) {
       ? state.doors[obj.id]
         ? 'E · Escalader la fenêtre'
         : 'Maintenir E · Déverrouiller (2 s), puis E : escalader'
-      : `${state.doorLocks?.[obj.id] ? 'VERROUILLÉE · Maintenir E debout pour déverrouiller de l’intérieur' : 'Maintenir E debout : verrouiller de l’intérieur'} · E · ${state.doors[obj.id] === 'ajar' ? 'Relâcher pour refermer' : state.doors[obj.id] ? 'Fermer' : 'Ouvrir'} la porte${!obj.patio ? ' · Shift + maintenir E : serrure · Debout + maintenir E : verrou' : ''}`
+      : `${state.doorLocks?.[obj.id] ? 'VERROUILLÉE · Maintenir E debout pour déverrouiller de l’intérieur' : 'Maintenir E debout : verrouiller de l’intérieur'} · E · ${state.doors[obj.id] === 'ajar' ? 'Ouvrir complètement (B : refermer)' : state.doors[obj.id] ? 'Fermer' : 'Ouvrir'} la porte${!obj.patio ? ' · B : entrouvrir · Shift + maintenir E : serrure · Debout + maintenir E : verrou' : ''}`
     : kind === 'hide'
       ? 'E · Se cacher'
       : kind === 'stairs'
@@ -717,6 +717,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE') send({ type: 'action', action: 'beginUse' });
   if (e.code === 'KeyF') send({ type: 'action', action: 'torch' });
   if (e.code === 'KeyL') send({ type: 'action', action: 'lock' });
+  if (e.code === 'KeyB') send({ type: 'action', action: 'ajar' });
   if (e.code === 'KeyV') send({ type: 'action', action: 'climb' });
   if (e.code === 'KeyR') send({ type: 'action', action: 'drag' });
   if (e.code === 'KeyG') send({ type: 'action', action: 'charge' });

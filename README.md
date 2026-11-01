@@ -58,6 +58,7 @@ L’archive `retournement-de-situation-solo.zip` contient le site statique : ell
 | ZQSD, WASD ou flèches | Se déplacer |
 | Shift maintenu | S’accroupir et avancer discrètement |
 | E bref | Porte, objet, cachette, escalier, fenêtre ouverte, prendre/déposer un corps |
+| B | Entrouvrir/refermer une porte simple ; E l’ouvre complètement |
 | E maintenu près du sang | Nettoyer (3 secondes) |
 | E maintenu devant une fenêtre fermée | Déverrouiller (2 secondes), puis E pour escalader |
 | Accroupi + E maintenu devant une porte fermée | Observer au trou de serrure, sans ouvrir la porte |
@@ -216,3 +217,13 @@ Un invité disponible dans une pièce dont la lumière est coupée réagit, rejo
 Les personnages ne sont plus entièrement masqués par le bar en première personne : les meubles occultent uniquement leur géométrie. Les déplacements de caméra sont lissés, les faces intérieures regroupées pour réduire les appels de rendu et la résolution s’adapte après plusieurs secondes de faible cadence. La fluidité réelle reste dépendante du matériel et du navigateur.
 
 Jeu publié : https://retournement-de-situation-solo.jeferson-patry-sin.workers.dev/
+
+## Ajustements d’ambiance — novembre 2026
+
+Les conversations ne portent plus au-delà de six mètres et ne traversent plus les portes fermées ni les cloisons. Une phrase s’arrête si le joueur s’éloigne hors de portée ou referme la porte. Les pas sont plus discrets, sans modifier les bruits perçus par les invités dans la simulation.
+
+Les projecteurs muraux de la terrasse produisent des plages colorées, les guirlandes alternent des tons chauds et pastel, et les appliques du salon reprennent cette ambiance. Davantage d’invités dansent dès le début. Les pièces restent éclairées indépendamment de la proximité des fenêtres ; interrupteurs et coffret permettent toujours de couper le courant. Le bureau reçoit un clavier, un support d’écran et un caisson à tiroirs, en conservant le passage vers sa porte et son interrupteur.
+
+B permet de laisser une porte simple entrouverte : le battant reste opaque et seule la fente laisse voir. E l’ouvre entièrement ; B la referme. Le trou de serrure avec Shift + E maintenu reste disponible. Une porte verrouillée ne peut pas être entrouverte.
+
+Si le rendu reste sous 24 images/seconde après le premier ajustement automatique, un second palier réduit la résolution. La fluidité doit toujours être vérifiée sur le matériel du joueur.

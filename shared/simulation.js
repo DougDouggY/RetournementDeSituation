@@ -181,7 +181,7 @@ export class Simulation {
         angle: 0,
         state: this.scenario === 'hunt' ? 'patrol' : 'party',
         home: { f, x, z },
-        socialStyle: ['talk', 'listen', 'drink', 'dance'][i % 4],
+        socialStyle: i >= 5 ? 'dance' : ['talk', 'dance', 'drink', 'dance'][i % 4],
         socialNext: 5 + i * 1.3,
         socialSpot: null,
         alive: true,
@@ -419,7 +419,7 @@ export class Simulation {
         p.openProgress = 0;
         return;
       }
-      this.doorStates[obj.id] = !this.doorStates[obj.id];
+      this.doorStates[obj.id] = this.doorStates[obj.id] !== true;
       this.event('door', this.doorStates[obj.id] ? 'Porte ouverte' : 'Porte fermée', {
         f: p.f,
         x: obj.x,
@@ -596,6 +596,20 @@ export class Simulation {
       return;
     }
     if (p.peeking) return;
+    if (type === 'ajar') {
+      if (p.status !== 'free' || p.hidden || p.climb || p.pendingDoor) return;
+      const target = this.nearby(p);
+      if (target?.kind !== 'door') return;
+      const d = target.obj;
+      if (d.window || d.patio || this.doorLocks[d.id] || this.brokenDoors[d.id]) return;
+      this.doorStates[d.id] = this.doorStates[d.id] === 'ajar' ? false : 'ajar';
+      this.event('door', this.doorStates[d.id] ? 'Porte entrouverte' : 'Porte fermée', {
+        f: p.f,
+        x: d.x,
+        z: d.z,
+      });
+      return;
+    }
     if (type === 'cancelThrow') {
       p.charging = false;
       p.throwCharge = 0;
@@ -1015,7 +1029,7 @@ export class Simulation {
       g.state = 'party';
       if (this.time >= g.socialNext) {
         g.socialNext = this.time + 9 + this.random() * 10;
-        g.socialStyle = ['talk', 'listen', 'drink', 'dance'][Math.floor(this.random() * 4)];
+        g.socialStyle = ['talk', 'dance', 'drink', 'dance'][Math.floor(this.random() * 4)];
         g.socialSpot = null;
         // Local steps only: stay in the same party area and avoid furniture/other guests.
         for (let attempt = 0; attempt < 6; attempt++) {

@@ -157,7 +157,9 @@ try {
   assert.ok(await page.evaluate(() => !!window.__RDS.state.players[0].hidden));
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() => !window.__RDS.state.players[0].hidden);
-  await move('KeyD', () => window.__RDS.state.players[0].z > 8);
+  // Stop near the centre of the one-metre opening; state arrives every 100 ms,
+  // so waiting beyond its centre can leave the player against the door jamb.
+  await move('KeyD', () => window.__RDS.state.players[0].z > 7.85);
   await move('KeyW', () => window.__RDS.state.players[0].x > -10.6);
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() => window.__RDS.state.doors['d1-3']);

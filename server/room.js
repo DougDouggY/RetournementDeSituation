@@ -93,6 +93,7 @@ export class Room {
         'charge',
         'cancelThrow',
         'lock',
+        'ajar',
       ].includes(m.action)
     )
       this.sim.action(member.id, m.action);

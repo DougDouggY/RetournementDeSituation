@@ -11,7 +11,32 @@ import {
   peekView,
   canObserve,
 } from '../shared/map.js';
-import { Sound, proximityGain } from '../src/audio.js';
+import { Sound, proximityGain, voiceGain } from '../src/audio.js';
+
+test('conversation is local, inaudible through a closed door and cancelled when walking away', () => {
+  const listener = { f: 1, x: -27, z: -1 };
+  assert.ok(voiceGain({ f: 1, x: -28, z: -1 }, listener) > 0.5);
+  assert.equal(voiceGain({ f: 1, x: -34, z: -1 }, listener), 0);
+  const source = { f: 1, x: -23, z: -1 };
+  assert.equal(voiceGain(source, listener, {}), 0);
+  assert.ok(voiceGain(source, listener, { 'entry-west': true }) > 0);
+  const previous = globalThis.speechSynthesis;
+  let cancelled = 0;
+  globalThis.speechSynthesis = { cancel: () => cancelled++ };
+  try {
+    const sound = new Sound();
+    sound.activeVoiceSource = source;
+    sound.update(
+      { events: [], guards: [], doors: {}, phase: 'infiltration', power: false },
+      listener,
+    );
+    assert.equal(cancelled, 1);
+    assert.equal(sound.activeVoiceSource, null);
+  } finally {
+    if (previous === undefined) delete globalThis.speechSynthesis;
+    else globalThis.speechSynthesis = previous;
+  }
+});
 
 test('nearby voices fade with distance, stop between floors and attenuate behind opaque doors', () => {
   const listener = { f: 1, x: -27, z: -1 };
@@ -65,6 +90,25 @@ test('narrow ajar doors permit sight through the slit but block every body cross
   assert.equal(lineClear(1, { x: -25.2, z: -1.35 }, { x: -24.8, z: -1.35 }, states), true);
   for (let z = -1.45; z < -0.5; z += 0.05) assert.equal(blocked(1, -25, z, states, 0.32), true);
   assert.equal(blocked(1, -25, -1, { [d.id]: true }, 0.32), false);
+});
+
+test('B leaves an opaque door ajar, E opens it fully, and locked doors stay closed', () => {
+  const s = new Simulation();
+  s.addPlayer('p');
+  s.start(true);
+  const p = s.players[0];
+  Object.assign(p, { f: 1, x: -26.1, z: -1 });
+  s.action('p', 'ajar');
+  assert.equal(s.doorStates['entry-west'], 'ajar');
+  assert.equal(lineClear(1, { x: -27, z: -1 }, { x: -23, z: -1 }, s.doorStates), false);
+  s.action('p', 'interact');
+  assert.equal(s.doorStates['entry-west'], true);
+  s.action('p', 'ajar');
+  s.action('p', 'ajar');
+  assert.equal(s.doorStates['entry-west'], false);
+  s.doorLocks['entry-west'] = { region: 'hall1' };
+  s.action('p', 'ajar');
+  assert.equal(s.doorStates['entry-west'], false);
 });
 
 test('the closed keyhole provides an interior view without exposing the body, and cancels on movement', () => {

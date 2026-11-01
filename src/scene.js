@@ -277,8 +277,13 @@ function furniture(p) {
         for (const z of [-d / 2 + 0.15, d / 2 - 0.15]) leg(x, z, h);
       if (p.type === 'desk') {
         b(-0.6, 1.12, 0, 0.6, 0.05, 0.45, 0xd1c8aa);
+        b(0.5, 1.1, 0.48, 0.85, 0.05, 0.3, 0x333b3b);
+        b(0.5, 1.18, -0.2, 0.12, 0.25, 0.1, 0x252e32);
         b(0.5, 1.35, -0.2, 0.9, 0.6, 0.12, 0x252e32);
         b(0.5, 1.36, -0.12, 0.73, 0.43, 0.02, 0x648385);
+        b(-w / 2 + 0.5, 0.55, 0, 0.8, 0.82, d - 0.2, wood);
+        for (const y of [0.3, 0.57, 0.84])
+          b(-w / 2 + 0.5, y, d / 2 - 0.08, 0.3, 0.04, 0.05, 0xc2a166);
       } else {
         cylinder(group, 0.25, h + 0.12, 0, 0.22, 0.19, 0.08, 0xcec2a0);
         cylinder(group, -0.4, h + 0.22, 0.12, 0.07, 0.09, 0.35, 0x425c47);
@@ -724,14 +729,17 @@ export class GameScene {
       exterior.add(light);
       this.gardenLights.push(light);
     }
-    for (const x of [-21, -9, 9, 21]) {
+    for (const [index, x] of [-21, -9, 9, 21].entries()) {
+      const color = [0x9c79ff, 0xffc477, 0x59cce6, 0xf381b7][index];
       box(exterior, x, 2.7, -16.3, 0.8, 0.35, 0.5, 0x29312e);
       const lens = box(exterior, x, 2.65, -16.58, 0.65, 0.2, 0.08, 0xffddaa);
-      lens.material = new THREE.MeshStandardMaterial({ color: 0xffddaa, emissive: 0xffc477 });
+      lens.material = new THREE.MeshStandardMaterial({ color, emissive: color });
       this.fixtureMeshes.push({ mesh: lens, room: 'outside' });
-      const flood = new THREE.PointLight(0xffd6a2, 65, 13, 2);
+      const wash = lightPool(exterior, x, -21, 9, 12, color);
+      this.gardenFixtures.push({ glass: lens, pool: wash });
+      const flood = new THREE.PointLight(color, 85, 15, 2);
       flood.position.set(x, 2.5, -17);
-      flood.userData.poweredIntensity = 65;
+      flood.userData.poweredIntensity = 85;
       exterior.add(flood);
       this.gardenLights.push(flood);
     }
@@ -743,10 +751,11 @@ export class GameScene {
         const x = -23 + (i * 46) / 24,
           y = 3.8 - 0.6 * Math.sin((Math.PI * i) / 24);
         points.push(new THREE.Vector3(x, y, z));
-        const bulb = sphere(exterior, x, y - 0.12, z, 0.09, 0xffd99a);
+        const color = [0xffd99a, 0xe997bf, 0x88cfe1][i % 3];
+        const bulb = sphere(exterior, x, y - 0.12, z, 0.09, color);
         bulb.material = new THREE.MeshStandardMaterial({
-          color: 0xffd99a,
-          emissive: 0xffbc60,
+          color,
+          emissive: color,
           emissiveIntensity: 1,
         });
         this.fixtureMeshes.push({ mesh: bulb, room: 'outside' });
@@ -970,7 +979,9 @@ export class GameScene {
         const sign = regionAt(f, w.x + dx, w.z + dz) === r.id ? 1 : -1;
         const x = w.x + dx * sign,
           z = w.z + dz * sign;
-        const glow = new THREE.PointLight(0xffdab2, 65, Math.max(r.w, r.d) + 8, 2);
+        const color =
+          r.id === 'r1-0' ? [0xf0b47e, 0xa28ae6, 0x75c8d4, 0xe996b7][index % 4] : 0xffdab2;
+        const glow = new THREE.PointLight(color, 65, Math.max(r.w, r.d) + 8, 2);
         glow.userData.roomId = r.id;
         glow.position.set(x, 2.05, z);
         const plate = box(
@@ -994,8 +1005,8 @@ export class GameScene {
           0xffe3b0,
         );
         shade.material = new THREE.MeshStandardMaterial({
-          color: 0xffe3b0,
-          emissive: 0xffb65b,
+          color,
+          emissive: color,
           emissiveIntensity: 1,
         });
         this.fixtureMeshes.push({ mesh: shade, room: r.id });
@@ -1278,16 +1289,27 @@ export class GameScene {
   setQuality(low) {
     this.lowQuality = low;
     this.adapted = false;
+    this.reducedResolution = false;
     this.slowSeconds = 0;
     this.renderer.setPixelRatio(low ? 0.8 : Math.min(devicePixelRatio, 1.25));
     this.renderer.shadowMap.enabled = !low;
     this.resize();
   }
   adaptQuality(fps) {
-    if (this.lowQuality || this.adapted) return;
+    if (this.lowQuality || this.reducedResolution) return;
+    if (this.adapted) {
+      this.slowSeconds = fps < 24 ? (this.slowSeconds || 0) + 1 : 0;
+      if (this.slowSeconds >= 3) {
+        this.reducedResolution = true;
+        this.renderer.setPixelRatio(Math.min(devicePixelRatio, 0.65));
+        this.resize();
+      }
+      return;
+    }
     this.slowSeconds = fps < 32 ? (this.slowSeconds || 0) + 1 : 0;
     if (this.slowSeconds >= 3) {
       this.adapted = true;
+      this.slowSeconds = 0;
       this.renderer.setPixelRatio(Math.min(devicePixelRatio, 0.9));
       this.renderer.shadowMap.enabled = false;
       this.resize();

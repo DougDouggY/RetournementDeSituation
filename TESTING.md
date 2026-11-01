@@ -1,5 +1,16 @@
 # Vérifications exécutées — 29 octobre 2026
 
+## Vérification d’ambiance — 1er novembre 2026
+
+- `npm test` : 99 tests réussis, aucun échec ni test ignoré. Les nouveaux contrôles couvrent la portée des conversations, leur arrêt derrière une porte, les commandes des portes entrouvertes et les deux paliers de réduction automatique de résolution.
+- `npm run test:solo` : parcours réussi avec les API et WebSocket bloqués, sans erreur JavaScript/WebGL.
+- `npm run test:fps` : parcours complet réussi, incluant éclairage permanent du bureau depuis l’extérieur, interrupteur, porte opaque, armoire, escaliers, étage, souris et changement de vue. Le déplacement automatisé vers la porte du bureau est centré sur l’ouverture pour éviter le chambranle ; aucune assertion n’a été retirée.
+- Contrôle Chromium supplémentaire du build de production au clavier : B entrouvre une porte opaque, E l’ouvre entièrement, B permet de la refermer. Capture : `test-results/opaque-ajar-door.png`.
+- Contrôle visuel de la terrasse en développement, avec position de départ injectée uniquement dans la réponse du Worker interceptée par Playwright : 54 éléments lumineux extérieurs allumés et cinq danseurs, sans erreur de page. Capture : `test-results/festival-terrace-fps.png`.
+- Compilation solo et assemblage `wrangler deploy --dry-run` réussis. La tentative de publication directe exige un `CLOUDFLARE_API_TOKEN` absent de cette machine. L’accès à l’URL publique est refusé par le proxy ; les vérifications locales ne prouvent pas la version déployée.
+
+Ces contrôles utilisent Chromium avec SwiftShader. Ils ne mesurent pas la fluidité sur le GPU du joueur, ni la qualité des voix de synthèse disponibles sur son appareil. La musique procédurale et les niveaux sonores sont couverts par les tests de logique ; les parcours navigateur sont exécutés avec le son coupé.
+
 Environnement : Linux, Node.js 24.19.0, Chromium système avec WebGL logiciel SwiftShader. Aucun déploiement distant effectué.
 
 | Vérification | Résultat |

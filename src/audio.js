@@ -7,6 +7,10 @@ export function proximityGain(source, listener, doors = {}, range = 14) {
   const gain = Math.pow(Math.max(0, 1 - distance / range), 2);
   return gain * (lineClear(listener.f, listener, source, doors, true, false) ? 1 : 0.18);
 }
+export function voiceGain(source, listener, doors = {}) {
+  if (!lineClear(listener.f, listener, source, doors, true, false)) return 0;
+  return proximityGain(source, listener, doors, 6);
+}
 // Original procedural sounds: no third-party recordings or licensed samples.
 export class Sound {
   constructor() {
@@ -97,6 +101,7 @@ export class Sound {
     if (voice) u.voice = voice;
     speechSynthesis.cancel();
     speechSynthesis.speak(u);
+    return true;
   }
   musicNote(frequency, length, volume, type = 'sine') {
     if (!this.ctx || volume <= 0 || this.volumes.music <= 0) return;
@@ -125,12 +130,20 @@ export class Sound {
       if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
       return;
     }
+    if (this.activeVoiceSource && voiceGain(this.activeVoiceSource, me, state.doors) < 0.025) {
+      if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
+      this.activeVoiceSource = null;
+    }
     for (const e of state.events) {
       if (e.id <= this.lastEvent) continue;
       this.lastEvent = e.id;
       if (e.f !== undefined && (e.f !== me.f || Math.hypot(e.x - me.x, e.z - me.z) > 20)) continue;
-      if (e.type === 'voice')
-        this.voice(e.text.replace(/^.*? : /, ''), proximityGain(e, me, state.doors));
+      if (e.type === 'voice') {
+        const gain = voiceGain(e, me, state.doors);
+        if (gain >= 0.025) {
+          if (this.voice(e.text.replace(/^.*? : /, ''), gain)) this.activeVoiceSource = e;
+        }
+      }
       if (e.type === 'intro') this.voice(e.text);
       if (e.type === 'kill') {
         this.noise(0.4, 0.4);
@@ -159,7 +172,7 @@ export class Sound {
       now - this.lastStep > (me.running ? 240 : me.crouching ? 650 : 400)
     ) {
       this.lastStep = now;
-      this.tone(110, 0.045, me.crouching ? 0.004 : me.running ? 0.022 : 0.012, 'triangle', 55);
+      this.tone(110, 0.045, me.crouching ? 0.002 : me.running ? 0.014 : 0.006, 'triangle', 55);
     }
     // Original terrace loop, synthesized locally; no remote audio or samples.
     const party =
