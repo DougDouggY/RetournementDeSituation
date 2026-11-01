@@ -82,14 +82,14 @@ try {
   await page.keyboard.down('KeyE');
   await page.waitForFunction(
     () =>
-      window.__RDS.state.players[0].peeking === 'entry-west' &&
+      window.__RDS.state.players[0].doorPeek === 'entry-west' &&
       window.__RDS.viewMode === 'first-person',
   );
-  assert.equal(await page.evaluate(() => window.__RDS.state.doors['entry-west']), false);
+  assert.equal(await page.evaluate(() => window.__RDS.state.doors['entry-west']), 'ajar');
   await page.screenshot({ path: 'test-results/keyhole-from-top-view.png' });
   await page.keyboard.up('KeyE');
   await page.waitForFunction(
-    () => !window.__RDS.state.players[0].peeking && window.__RDS.viewMode === 'top',
+    () => !window.__RDS.state.players[0].doorPeek && window.__RDS.viewMode === 'top',
   );
 
   await page.keyboard.down('KeyG');

@@ -1,5 +1,15 @@
 # Vérifications exécutées — 29 octobre 2026
 
+## Reprise visuelle, terrasse et commandes E — 1er novembre 2026
+
+- `npm test` : **100 tests réussis**, sans échec ni test ignoré. Les abris extérieurs sont accessibles, permettent l’observation avec E maintenu et rendent le joueur à sa position d’entrée. Les buissons couvrent les deux approches de la terrasse. Les tests des portes vérifient E bref, maintien, relâchement et annulation avec un battant opaque.
+- `npm run test:solo` : parcours réussi avec le maintien de E pour la porte entrouverte, puis retour à la vue du dessus au relâchement ; aucune requête de jeu, aucun WebSocket et aucune erreur JavaScript/WebGL.
+- `npm run test:fps` : parcours complet réussi, comprenant porte entrouverte, fenêtre, éclairage et interrupteur du bureau, armoire, escaliers dans les deux sens, étage, souris et F2 ; aucune erreur JavaScript/WebGL.
+- `node tests/visual-review.mjs` : **dix scènes de contrôle réussies**, sans erreur de navigateur. Captures des battants bruns et de l’observation par la fente, du personnage derrière le bar, de la terrasse en vue du dessus, des buissons, de l’abri d’observation et du salon/bureau dans les deux vues. B est vérifié sans effet. Le résultat courant est écrit dans `test-results/visual-review.json`.
+- Captures inspectées : `review-door-brown.png`, `review-door-slit.png`, `review-bar-standing-silhouette.png`, `review-bush-observation.png`, `review-garden-shelter-observation.png`, `review-salon-fps.png`, `review-salon-top.png`, `review-office-fps.png` et `review-office-top.png`, dans `test-results/`.
+
+Les scènes de contrôle utilisent des positions déterministes injectées uniquement dans la réponse du Worker de développement interceptée par Playwright. Le site publié ne possède pas ces commandes de test. Les parcours solo et première personne utilisent le build de production et les vrais déplacements au clavier. Le rendu logiciel SwiftShader permet de vérifier le fonctionnement et l’aspect ; il ne valide pas la fluidité sur le matériel du joueur. Les tests navigateur coupent le son ; les contrôles de proximité des voix, des pas et de la musique restent couverts par les tests de logique.
+
 ## Vérification d’ambiance — 1er novembre 2026
 
 - `npm test` : 99 tests réussis, aucun échec ni test ignoré. Les nouveaux contrôles couvrent la portée des conversations, leur arrêt derrière une porte, les commandes des portes entrouvertes et les deux paliers de réduction automatique de résolution.

@@ -293,9 +293,9 @@ function prop(f, room, type, x, z, w, d, extra = {}) {
 function device(f, room, type, x, z) {
   devices.push({ id: `v${id++}`, f, room, type, x, z });
 }
-prop(1, 'r1-0', 'sofa', -17, -6.5, 6, 2, { hide: true });
+prop(1, 'r1-0', 'sofa', -17, -6.5, 6, 2, { hide: true, rotation: Math.PI });
 prop(1, 'r1-0', 'sofa', -8, -10, 2, 5, { hide: true, rotation: -Math.PI / 2 });
-prop(1, 'r1-0', 'table', -17, -10, 3, 1.5);
+prop(1, 'r1-0', 'table', -17, -10, 3, 1.5, { low: true });
 prop(1, 'r1-0', 'tv', -11, -15.35, 4, 0.9);
 prop(1, 'r1-0', 'shelf', -7, 3.35, 4, 1, { hide: true, rotation: Math.PI });
 prop(1, 'r1-0', 'chair', 0, 1, 1.2, 1.2);
@@ -314,11 +314,13 @@ prop(1, 'r1-3', 'chair', -17, 7, 1, 1, { rotation: Math.PI });
 prop(1, 'r1-3', 'shelf', -24.25, 9.5, 1.2, 4, { hide: true, rotation: Math.PI / 2 });
 prop(1, 'r1-3', 'sofa', -14, 11, 5, 1.5, { hide: true, rotation: Math.PI });
 prop(1, 'r1-3', 'wardrobe', -11, 2, 1.5, 2, { hide: true, rotation: -Math.PI / 2 });
+prop(1, 'r1-3', 'shelf', -13.2, 0.7, 4, 1);
+prop(1, 'r1-3', 'rug', -17, 5.5, 7, 6, { solid: false });
 prop(1, 'r1-4', 'sink', 17, 0.8, 3, 1.2);
 prop(1, 'r1-4', 'toilet', 23.8, 1.3, 1.2, 1.8);
-prop(1, 'r1-4', 'wardrobe', 24, 5, 1.5, 1.4, { hide: true });
+prop(1, 'r1-4', 'wardrobe', 24, 5, 1.5, 1.4, { hide: true, rotation: -Math.PI / 2 });
 prop(1, 'r1-5', 'car', 17.5, 10.7, 4, 6);
-prop(1, 'r1-5', 'shelf', 12, 13.5, 1.5, 4, { hide: true });
+prop(1, 'r1-5', 'shelf', 12, 13.5, 1.5, 4, { hide: true, rotation: Math.PI / 2 });
 prop(1, 'r1-5', 'boxes', 23, 7, 2, 1.5, { hide: true });
 prop(1, 'r1-5', 'washer', 22.5, 15, 3, 1.5);
 prop(1, 'r1-5', 'chair', CAPTURE_POINT.x, CAPTURE_POINT.z, 0.8, 0.8, { solid: false });
@@ -338,11 +340,11 @@ for (const [rid, x, z, wx, wz, dx, dz] of [
 }
 prop(2, 'r2-1', 'sink', 3, -15.2, 3, 1.1);
 prop(2, 'r2-1', 'bath', 5.7, -11, 2, 1.4);
-prop(2, 'r2-1', 'toilet', 0.5, -11.2, 1.2, 1.8);
+prop(2, 'r2-1', 'toilet', 0.5, -11.2, 1.2, 1.8, { rotation: Math.PI });
 prop(2, 'r2-5', 'sink', 19, 2.8, 3, 1.1);
 prop(2, 'r2-5', 'bath', 23.8, 5, 1.8, 3);
-prop(2, 'r2-5', 'toilet', 17, 7.5, 1.2, 1.8);
-prop(2, 'r2-6', 'shelf', 24, 12.5, 1.4, 5, { hide: true });
+prop(2, 'r2-5', 'toilet', 17, 7.5, 1.2, 1.8, { rotation: Math.PI });
+prop(2, 'r2-6', 'shelf', 24, 12.5, 1.4, 5, { hide: true, rotation: -Math.PI / 2 });
 prop(2, 'r2-6', 'washer', 17, 15, 4, 1.5);
 for (const r of rooms) {
   const d = doors.find((d) => d.f === r.f && d.room === r.id && !d.exterior);
@@ -379,8 +381,19 @@ for (const [x, z] of [
 ])
   prop(1, 'outside', 'lounger', x, z, 2, 4, { occludes: false });
 prop(1, 'outside', 'table', 16, -24, 2.5, 2);
-prop(1, 'outside', 'sofa', 20, -22, 4, 1.7, { hide: true });
+prop(1, 'outside', 'sofa', 20, -22, 4, 1.7, { hide: true, rotation: Math.PI });
 prop(1, 'outside', 'boxes', 32, 16, 2.5, 2, { hide: true });
+// Garden storage shelters: enter with E, hold E inside to watch the terrace.
+prop(1, 'outside', 'wardrobe', -25.8, -19.5, 1.8, 2, {
+  hide: true,
+  outdoor: true,
+  rotation: Math.PI / 2,
+});
+prop(1, 'outside', 'wardrobe', 25.8, -22, 1.8, 2, {
+  hide: true,
+  outdoor: true,
+  rotation: -Math.PI / 2,
+});
 for (const [x, z] of [
   [-29, -12],
   [-29, 10],
@@ -397,6 +410,13 @@ for (const [x, z, w, d] of [
   [-26, -27, 4, 3],
   [-21, -28, 4, 2],
   [-16, -28, 3, 2],
+  [-9, -28, 3, 1.6],
+  [-2, -28, 3, 1.6],
+  [6, -28, 3, 1.6],
+  [14, -28, 3, 1.6],
+  [21, -28, 3, 1.6],
+  [-25, -24, 2, 3],
+  [24.5, -25.5, 2, 3],
   [27, -25, 3, 4],
   [31, -12, 3, 5],
   [31, 3, 3, 4],
@@ -413,7 +433,7 @@ export function illuminationAt(p, lights = {}, power = true) {
   if (region !== 'outside') return lights[region] === false ? 0 : 1;
   const sources = [
     ...gardenLamps.map((l) => ({ ...l, r: 3.8 })),
-    ...[-21, -9, 9, 21].map((x) => ({ x, z: -19, r: 5.5 })),
+    ...[-21, -9, 9, 21].map((x) => ({ x, z: -19, r: 11 })),
     { x: -5, z: -22, r: 6 },
     { x: 0, z: 17, r: 4 },
   ];
@@ -636,6 +656,15 @@ export function pathfind(f, start, end, states = {}, avoid = []) {
 }
 
 export function peekView(viewer, states = {}) {
+  const slit = doors.find((d) => d.id === viewer.doorPeek && d.f === viewer.f);
+  if (slit && states[slit.id] === 'ajar' && distance(viewer, slit) <= 1.9) {
+    const side = Math.sign(slit.axis === 'z' ? viewer.x - slit.x : viewer.z - slit.z) || 1;
+    return {
+      ...viewer,
+      x: slit.axis === 'x' ? slit.x + slit.w * 0.35 : slit.x + side * 0.35,
+      z: slit.axis === 'z' ? slit.z - slit.d * 0.35 : slit.z + side * 0.35,
+    };
+  }
   if (viewer.hidden && viewer.hidePeek) {
     const hide = hides.find((h) => h.id === viewer.hidden),
       prop = props.find((p) => p.id === hide?.prop);

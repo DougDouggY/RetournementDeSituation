@@ -152,6 +152,7 @@ export class Simulation {
         hideAt: -10,
         pendingDoor: null,
         peeking: null,
+        doorPeek: null,
         opening: null,
         openProgress: 0,
         attackCooldown: 0,
@@ -301,7 +302,9 @@ export class Simulation {
   }
   endUse(p, cancel = false) {
     const pending = p.pendingDoor,
-      observing = !!p.peeking || !!p.hidePeek;
+      observing = !!p.peeking || !!p.hidePeek || !!p.doorPeek;
+    if (p.doorPeek && this.doorStates[p.doorPeek] === 'ajar') this.doorStates[p.doorPeek] = false;
+    p.doorPeek = null;
     p.peeking = null;
     p.hidePeek = false;
     p.pendingDoor = null;
@@ -344,13 +347,16 @@ export class Simulation {
       return false;
     }
     if (held >= 0.45 && !pending.done) {
-      if (pending.crouch && !this.doorStates[d.id]) p.peeking = d.id;
-      else if (!pending.crouch) {
+      if (this.doorLocks[d.id]) {
         this.toggleLock(p);
+        pending.done = true;
+      } else {
+        this.doorStates[d.id] = 'ajar';
+        p.doorPeek = d.id;
         pending.done = true;
       }
     }
-    return !!p.peeking;
+    return !!p.peeking || !!p.doorPeek;
   }
   beginStair(entity, s) {
     entity.stair = {
@@ -595,21 +601,7 @@ export class Simulation {
       this.endUse(p, type === 'cancelUse');
       return;
     }
-    if (p.peeking) return;
-    if (type === 'ajar') {
-      if (p.status !== 'free' || p.hidden || p.climb || p.pendingDoor) return;
-      const target = this.nearby(p);
-      if (target?.kind !== 'door') return;
-      const d = target.obj;
-      if (d.window || d.patio || this.doorLocks[d.id] || this.brokenDoors[d.id]) return;
-      this.doorStates[d.id] = this.doorStates[d.id] === 'ajar' ? false : 'ajar';
-      this.event('door', this.doorStates[d.id] ? 'Porte entrouverte' : 'Porte fermée', {
-        f: p.f,
-        x: d.x,
-        z: d.z,
-      });
-      return;
-    }
+    if (p.peeking || p.doorPeek) return;
     if (type === 'cancelThrow') {
       p.charging = false;
       p.throwCharge = 0;

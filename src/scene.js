@@ -28,6 +28,7 @@ import {
   visibleRegions,
   canObserve,
   gardenLamps,
+  inBush,
   windowNormal,
   roomFloorParts,
   bottleTrajectory,
@@ -247,6 +248,10 @@ function furniture(p) {
       b(0, 0.7, -d / 2, w, 1.3, 0.16, wood);
       break;
     case 'wardrobe': {
+      if (p.outdoor) {
+        b(0, 2.65, 0, w + 0.2, 0.18, d + 0.2, 0x3b5144);
+        for (const x of [-w / 2, w / 2]) b(x, 1.3, -d / 2, 0.16, 2.6, 0.16, 0x3b5144);
+      }
       b(0, 1.25, -d / 2 + 0.06, w, 2.5, 0.12, wood);
       for (const x of [-w / 2 + 0.06, w / 2 - 0.06]) b(x, 1.25, 0, 0.12, 2.5, d, wood);
       for (const y of [0.08, 2.5]) b(0, y, 0, w, 0.12, d, wood);
@@ -271,7 +276,7 @@ function furniture(p) {
     case 'table':
     case 'desk':
     case 'nightstand': {
-      const h = p.type === 'nightstand' ? 0.65 : 1;
+      const h = p.low ? 0.48 : p.type === 'nightstand' ? 0.65 : 1;
       b(0, h, 0, w, 0.16, d, wood);
       for (const x of [-w / 2 + 0.15, w / 2 - 0.15])
         for (const z of [-d / 2 + 0.15, d / 2 - 0.15]) leg(x, z, h);
@@ -284,6 +289,15 @@ function furniture(p) {
         b(-w / 2 + 0.5, 0.55, 0, 0.8, 0.82, d - 0.2, wood);
         for (const y of [0.3, 0.57, 0.84])
           b(-w / 2 + 0.5, y, d / 2 - 0.08, 0.3, 0.04, 0.05, 0xc2a166);
+        cylinder(group, -w / 2 + 0.45, 1.12, -0.25, 0.2, 0.23, 0.07, 0x8e754a);
+        cylinder(group, -w / 2 + 0.45, 1.35, -0.25, 0.025, 0.025, 0.5, 0x8e754a);
+        const shade = cylinder(group, -w / 2 + 0.45, 1.65, -0.25, 0.14, 0.28, 0.3, 0xf1d49a);
+        shade.material = new THREE.MeshStandardMaterial({
+          color: 0xf1d49a,
+          emissive: 0xffc06f,
+          emissiveIntensity: 1,
+        });
+        group.userData.fixtureMeshes = [shade];
       } else {
         cylinder(group, 0.25, h + 0.12, 0, 0.22, 0.19, 0.08, 0xcec2a0);
         cylinder(group, -0.4, h + 0.22, 0.12, 0.07, 0.09, 0.35, 0x425c47);
@@ -336,6 +350,19 @@ function furniture(p) {
       }
       break;
     case 'counter':
+      if (p.room === 'outside') {
+        // A real waist-high bar: heads and shoulders remain above its solid top.
+        b(0, 0.48, 0, w, 0.96, d, 0x594432);
+        b(0, 1.02, 0, w + 0.15, 0.12, d + 0.2, 0xb29265);
+        for (let x = -w / 2 + 0.12; x < w / 2; x += 0.25)
+          b(x, 0.5, d / 2 + 0.025, 0.08, 0.85, 0.045, 0x8b6947, 0);
+        for (let i = 0; i < 5; i++) {
+          const x = -w / 2 + 0.5 + i * 0.8;
+          cylinder(group, x, 1.2, -0.2, 0.055, 0.07, 0.24, [0x406b50, 0xb18a50][i % 2]);
+          cylinder(group, x + 0.2, 1.15, 0.2, 0.065, 0.05, 0.15, 0xc5cfb6);
+        }
+        break;
+      }
       b(0, 0.6, 0, w, 1.2, d, 0x82918a);
       b(0, 1.24, 0, w + 0.1, 0.12, d + 0.1, 0xc0b9a3);
       for (let x = -w / 2 + 0.6; x < w / 2; x += 1.2)
@@ -353,16 +380,16 @@ function furniture(p) {
       });
       break;
     case 'bush':
-      for (let i = 0; i < 8; i++)
+      for (let i = 0; i < 10; i++)
         sphere(
           group,
-          (((i % 4) - 1.5) * w) / 6,
-          0.65 + (i % 2) * 0.15,
-          ((Math.floor(i / 4) - 0.5) * d) / 2,
-          0.6,
-          0x294a32,
-          w / 3,
+          (((i % 5) + 0.5) / 5 - 0.5) * w,
+          0.65 + (i % 3) * 0.06,
+          ((Math.floor(i / 5) + 0.5) / 2 - 0.5) * d,
           1,
+          [0x294a32, 0x385b39, 0x456444][i % 3],
+          w / 7,
+          0.62,
           d / 3,
         );
       break;
@@ -639,6 +666,8 @@ export class GameScene {
     this.roomMeshes.set('outside', this.exterior);
     this.floors = [];
     this.doorMeshes = new Map();
+    this.doorSurfaceMaterials = new Map();
+    this.bushMeshes = new Map();
     this.cabinetMeshes = new Map();
     this.fpsWallFaces = [];
     this.doorGroups = new Map();
@@ -647,6 +676,7 @@ export class GameScene {
     this.windowPools = new Map();
     this.gardenFixtures = [];
     this.gardenLights = [];
+    this.partyPools = [];
     this.wallMeshes = [];
     this.actors = new Map();
     this.effects = [];
@@ -666,6 +696,13 @@ export class GameScene {
     box(exterior, 0, 0.08, 18, 8, 0.16, 4, 0x5c6060);
     box(exterior, TERRACE.x, 0.02, TERRACE.z, TERRACE.w, 0.14, TERRACE.d, 0x9d8f74);
     for (let x = -23; x < 22; x += 1.2) box(exterior, x, 0.1, -22, 0.025, 0.01, 11.8, 0x756b59, 0);
+    // The festoon cables have visible supports; the deck edges remain walkable.
+    for (const x of [-23, 23])
+      for (const z of [-20, -26]) {
+        box(exterior, x, 1.95, z, 0.16, 3.9, 0.16, 0x554938);
+        box(exterior, x, 3.94, z, 0.26, 0.12, 0.26, 0xb89c6e);
+      }
+    for (const z of [-16.1, -27.95]) box(exterior, -1, 0.12, z, 46, 0.12, 0.14, 0xb7a184);
     box(exterior, POOL.x, -0.12, POOL.z, POOL.w + 1.2, 0.25, POOL.d + 1.2, 0xb6c1b0);
     const water = box(exterior, POOL.x, 0.025, POOL.z, POOL.w, 0.035, POOL.d, 0x32869b, 0);
     water.material = new THREE.MeshStandardMaterial({
@@ -795,7 +832,14 @@ export class GameScene {
       this.scene.add(light);
       return light;
     });
-    batchStatic(exterior, new Set(this.gardenFixtures.map((f) => f.glass)));
+    batchStatic(
+      exterior,
+      new Set([
+        ...this.gardenFixtures.map((f) => f.glass),
+        ...this.cabinetMeshes.values(),
+        ...this.bushMeshes.values(),
+      ]),
+    );
     this.bloodMesh = new THREE.InstancedMesh(
       new THREE.CircleGeometry(1, 10),
       new THREE.MeshBasicMaterial({
@@ -916,6 +960,11 @@ export class GameScene {
     const hall = new THREE.Group();
     group.add(hall);
     this.roomMeshes.set(`hall${f}`, hall);
+    for (const part of cutRects(hallFloorParts(f), f === 1 ? [ATRIUM, ...stairHoles] : [])) {
+      const ceiling = box(hall, part.x, FLOOR_HEIGHT - 0.4, part.z, part.w, 0.08, part.d, 0xb6aa90);
+      ceiling.visible = false;
+      this.ceilings.push(ceiling);
+    }
     for (const part of cutRects(hallFloorParts(f), f === 2 ? stairHoles : [])) {
       box(hall, part.x, 0.005, part.z, part.w, 0.04, part.d, 0x85765c);
       for (let x = part.x - part.w / 2 + 0.5; x < part.x + part.w / 2; x += 1.5)
@@ -986,9 +1035,9 @@ export class GameScene {
         glow.position.set(x, 2.05, z);
         const plate = box(
           roomGroup,
-          x,
+          w.x + dx * sign * 0.425,
           2.05,
-          z,
+          w.z + dz * sign * 0.425,
           w.axis === 'z' ? 0.12 : 0.5,
           0.62,
           w.axis === 'z' ? 0.5 : 0.12,
@@ -996,9 +1045,9 @@ export class GameScene {
         );
         const shade = box(
           roomGroup,
-          x + dx * sign * 0.3,
+          w.x + dx * sign * 0.85,
           2.05,
-          z + dz * sign * 0.3,
+          w.z + dz * sign * 0.85,
           0.34,
           0.42,
           0.34,
@@ -1010,11 +1059,46 @@ export class GameScene {
           emissiveIntensity: 1,
         });
         this.fixtureMeshes.push({ mesh: shade, room: r.id });
+        if (r.id === 'r1-0') {
+          const pool = lightPool(roomGroup, (x + r.nav.x) / 2, (z + r.nav.z) / 2, 7, 5, color);
+          this.partyPools.push({ mesh: pool, room: r.id });
+        }
+        if (index === 0 && ['r1-0', 'r1-3', 'r1-1'].includes(r.id)) {
+          const frame = new THREE.Group();
+          frame.position.set(w.x + dx * sign * 0.4, 1.25, w.z + dz * sign * 0.4);
+          frame.rotation.y = w.axis === 'z' ? Math.PI / 2 : 0;
+          roomGroup.add(frame);
+          box(frame, 0, 0, 0, 1.65, 0.9, 0.09, 0x40372e);
+          for (const side of [-1, 1]) {
+            box(frame, 0, 0, side * 0.055, 1.47, 0.72, 0.025, 0xd3bc91);
+            for (let i = 0; i < 4; i++)
+              box(
+                frame,
+                -0.5 + i * 0.33,
+                Math.sin(i * 2) * 0.12,
+                side * 0.075,
+                0.2,
+                0.25 + i * 0.07,
+                0.015,
+                [0x697e73, 0x9c6b4a, 0x495c67, 0xb49562][i],
+                0,
+              );
+          }
+        }
         roomGroup.add(glow);
         this.lightMeshes.set(index++ ? `${r.id}:${index}` : r.id, glow);
       }
       for (const part of cutRects(r.parts, f === 1 ? [ATRIUM, ...stairHoles] : [])) {
-        const ceiling = box(roomGroup, part.x, 3.16, part.z, part.w, 0.12, part.d, 0x26302b);
+        const ceiling = box(
+          roomGroup,
+          part.x,
+          FLOOR_HEIGHT - 0.4,
+          part.z,
+          part.w,
+          0.08,
+          part.d,
+          0xb6aa90,
+        );
         ceiling.visible = false;
         this.ceilings.push(ceiling);
       }
@@ -1136,6 +1220,9 @@ export class GameScene {
         leaf.material = leaf.material.clone();
         leaf.material.transparent = false;
         leaf.material.opacity = 1;
+        for (const side of [-1, 1])
+          for (const y of [0.65, 1.95])
+            box(pivot, 1, y, side * 0.078, 1.5, 0.96, 0.025, 0x87684d, 0.015);
         box(pivot, 1.75, 1.1, 0.12, 0.12, 0.12, 0.14, 0xc2a166);
         for (const side of [-1, 1]) {
           box(pivot, 1.7, 1.02, side * 0.085, 0.18, 0.28, 0.025, 0xc2a166);
@@ -1154,12 +1241,62 @@ export class GameScene {
             0xa59a7e,
           );
       }
+      if (!d.window && !d.patio) {
+        const copies = new Map();
+        doorGroup.traverse((mesh) => {
+          if (!mesh.isMesh || !mesh.material.emissive) return;
+          if (!copies.has(mesh.material)) {
+            const copy = mesh.material.clone();
+            copy.emissive.copy(copy.color);
+            copies.set(mesh.material, copy);
+          }
+          mesh.material = copies.get(mesh.material);
+        });
+        this.doorSurfaceMaterials.set(d.id, [...copies.values()]);
+        batchStatic(pivot);
+      }
       this.doorMeshes.set(d.id, pivot);
     }
     for (const p of props.filter((p) => p.f === f && p.type !== 'pool')) {
       const mesh = furniture(p);
       (this.roomMeshes.get(p.room) || group).add(mesh);
-      if (mesh.userData.cabinetLeaves) this.cabinetMeshes.set(p.id, mesh);
+      for (const fixture of mesh.userData.fixtureMeshes || [])
+        this.fixtureMeshes.push({ mesh: fixture, room: p.room });
+      if (mesh.userData.cabinetLeaves) {
+        this.cabinetMeshes.set(p.id, mesh);
+        batchStatic(mesh, new Set(mesh.userData.cabinetLeaves));
+        for (const leaf of mesh.userData.cabinetLeaves) batchStatic(leaf);
+        if (p.outdoor) {
+          const copies = new Map();
+          mesh.traverse((m) => {
+            if (!m.isMesh || !m.material.emissive) return;
+            if (!copies.has(m.material)) {
+              const copy = m.material.clone();
+              copy.emissive.copy(copy.color);
+              copy.emissiveIntensity = 0.18;
+              copies.set(m.material, copy);
+            }
+            m.material = copies.get(m.material);
+          });
+          mesh.userData.outdoorMaterials = [...copies.values()];
+        }
+      }
+      if (p.type === 'bush') {
+        batchStatic(mesh);
+        const copies = new Map();
+        mesh.traverse((m) => {
+          if (!m.isMesh) return;
+          if (!copies.has(m.material)) {
+            const copy = m.material.clone();
+            copy.transparent = true;
+            copy.emissive.copy(copy.color);
+            copy.emissiveIntensity = 0.06;
+            copies.set(m.material, copy);
+          }
+          m.material = copies.get(m.material);
+        });
+        this.bushMeshes.set(p.id, mesh);
+      }
     }
     for (const s of stairs.filter((s) => s.f === f && s.to === 2)) {
       const length = Math.abs(s.landing.z - s.z),
@@ -1248,7 +1385,7 @@ export class GameScene {
           ...this.fixtureMeshes.map((f) => f.mesh),
         ]),
       );
-    batchStatic(hall);
+    batchStatic(hall, new Set(this.ceilings));
     for (const w of this.wallGroups.filter((w) => w.f === f)) batchStatic(w.group);
     batchStatic(
       group,
@@ -1368,9 +1505,12 @@ export class GameScene {
         a.arms[1].rotation.x = -1.6 + Math.sin(beat * 0.5) * 0.15;
         a.head.rotation.x = -0.08;
       } else if (p.socialStyle === 'dance') {
-        a.body.rotation.z = Math.sin(beat) * 0.055;
-        a.arms[0].rotation.x = -0.8 + Math.sin(beat) * 0.3;
-        a.arms[1].rotation.x = -0.8 - Math.sin(beat) * 0.3;
+        const rhythm = (t * Math.PI * 2 * 110) / 60 + Number(p.id.slice(1));
+        a.arms[0].rotation.x = -1.1 + Math.sin(rhythm * 0.5) * 0.5;
+        a.arms[1].rotation.x = -1.1 - Math.sin(rhythm * 0.5) * 0.5;
+        a.legs[0].rotation.x = Math.sin(rhythm) * 0.22;
+        a.legs[1].rotation.x = -Math.sin(rhythm) * 0.22;
+        a.body.rotation.y = Math.sin(rhythm * 0.5) * 0.14;
       }
     } else {
       a.head.rotation.y = 0;
@@ -1456,7 +1596,8 @@ export class GameScene {
     this.scene.fog.density = observer ? 0 : 0.012;
     this.viewer = observer ? null : me;
     if (observer && this.observerView === 'follow') this.observerFloor = me.f;
-    const fps = !!me && (this.firstPerson || !!me.hidden || !!me.peeking) && !observer;
+    const fps =
+      !!me && (this.firstPerson || !!me.hidden || !!me.peeking || !!me.doorPeek) && !observer;
     this.effectiveFirstPerson = fps;
     const f = observer ? this.observerFloor : (me?.f ?? 1);
     const viewingPosition = me ? peekView(me, state.doors) : null;
@@ -1707,6 +1848,8 @@ export class GameScene {
       }
     }
     const power = state?.power !== false;
+    for (const pool of this.partyPools)
+      pool.mesh.visible = power && state?.lights[pool.room] !== false;
     for (const light of this.gardenLights)
       light.intensity = power ? light.userData.poweredIntensity : 0;
     for (const fixture of this.gardenFixtures) {
@@ -1821,6 +1964,17 @@ export class GameScene {
       const on = power && (!state || state.lights[id] !== false);
       for (const material of materials) material.emissiveIntensity = on ? 0.45 : 0;
     }
+    for (const [id, materials] of this.doorSurfaceMaterials) {
+      const d = doors.find((door) => door.id === id);
+      const side = me ? Math.sign(d.axis === 'z' ? me.x - d.x : me.z - d.z) || 1 : 1;
+      const sample = {
+        f: d.f,
+        x: d.x + (d.axis === 'z' ? side * 0.6 : 0),
+        z: d.z + (d.axis === 'x' ? side * 0.6 : 0),
+      };
+      const lit = illuminationAt(sample, state?.lights, power) > 0;
+      for (const material of materials) material.emissiveIntensity = lit ? 0.32 : 0.015;
+    }
     for (const fixture of this.fixtureMeshes)
       fixture.mesh.material.emissiveIntensity =
         power && (!state || state.lights[fixture.room] !== false) ? 1 : 0;
@@ -1830,6 +1984,8 @@ export class GameScene {
     for (const [id, cabinet] of this.cabinetMeshes) {
       const h = hides.find((h) => h.prop === id),
         occupant = state?.players.find((p) => p.hidden === h?.id);
+      for (const mat of cabinet.userData.outdoorMaterials || [])
+        mat.emissiveIntensity = power ? 0.18 : 0.025;
       const opening = occupant
         ? occupant.hidePeek
           ? 0.19
@@ -1844,6 +2000,16 @@ export class GameScene {
         (leaf, i) =>
           (leaf.rotation.y = THREE.MathUtils.damp(leaf.rotation.y, (i ? 1 : -1) * opening, 12, dt)),
       );
+    }
+    for (const [id, bush] of this.bushMeshes) {
+      const p = props.find((p) => p.id === id);
+      const inside =
+        fps && inBush(me) && Math.abs(me.x - p.x) <= p.w / 2 && Math.abs(me.z - p.z) <= p.d / 2;
+      bush.traverse((m) => {
+        if (!m.isMesh) return;
+        m.material.opacity = inside ? 0.16 : 1;
+        m.material.depthWrite = !inside;
+      });
     }
     if (fps) {
       const height = me.peeking ? 1.02 : me.crouching || me.hidden ? 0.95 : 1.65;
@@ -1860,7 +2026,7 @@ export class GameScene {
       this.fpsCamera.position.copy(this.eyePosition);
       const hide = hides.find((h) => h.id === me.hidden),
         cabinet = props.find((p) => p.id === hide?.prop);
-      const door = doors.find((d) => d.id === me.peeking);
+      const door = doors.find((d) => d.id === (me.peeking || me.doorPeek));
       const keyholeYaw = door
         ? door.axis === 'z'
           ? me.x < door.x
@@ -1870,7 +2036,11 @@ export class GameScene {
             ? 0
             : Math.PI
         : this.lookYaw;
-      const yaw = me.hidden ? cabinet?.rotation || 0 : me.peeking ? keyholeYaw : this.lookYaw;
+      const yaw = me.hidden
+        ? cabinet?.rotation || 0
+        : me.peeking || me.doorPeek
+          ? keyholeYaw
+          : this.lookYaw;
       const direction = new THREE.Vector3(
         Math.sin(yaw) * Math.cos(this.lookPitch),
         Math.sin(this.lookPitch),

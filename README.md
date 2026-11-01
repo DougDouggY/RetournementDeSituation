@@ -58,11 +58,10 @@ L’archive `retournement-de-situation-solo.zip` contient le site statique : ell
 | ZQSD, WASD ou flèches | Se déplacer |
 | Shift maintenu | S’accroupir et avancer discrètement |
 | E bref | Porte, objet, cachette, escalier, fenêtre ouverte, prendre/déposer un corps |
-| B | Entrouvrir/refermer une porte simple ; E l’ouvre complètement |
 | E maintenu près du sang | Nettoyer (3 secondes) |
 | E maintenu devant une fenêtre fermée | Déverrouiller (2 secondes), puis E pour escalader |
-| Accroupi + E maintenu devant une porte fermée | Observer au trou de serrure, sans ouvrir la porte |
-| Debout + E maintenu devant une porte, depuis la pièce | Verrouiller/déverrouiller |
+| E maintenu devant une porte simple | Entrouvrir et observer ; relâcher pour refermer |
+| E maintenu devant une porte verrouillée, depuis la pièce | Déverrouiller |
 | E maintenu depuis une cachette | Entrouvrir et observer ; un invité face à l’ouverture peut vous repérer |
 | Clic gauche | Éliminer une cible isolée à portée |
 | Clic droit maintenu, puis relâché | Charger puis lancer une bouteille ; deux secondes pour la portée maximale |
@@ -224,6 +223,14 @@ Les conversations ne portent plus au-delà de six mètres et ne traversent plus 
 
 Les projecteurs muraux de la terrasse produisent des plages colorées, les guirlandes alternent des tons chauds et pastel, et les appliques du salon reprennent cette ambiance. Davantage d’invités dansent dès le début. Les pièces restent éclairées indépendamment de la proximité des fenêtres ; interrupteurs et coffret permettent toujours de couper le courant. Le bureau reçoit un clavier, un support d’écran et un caisson à tiroirs, en conservant le passage vers sa porte et son interrupteur.
 
-B permet de laisser une porte simple entrouverte : le battant reste opaque et seule la fente laisse voir. E l’ouvre entièrement ; B la referme. Le trou de serrure avec Shift + E maintenu reste disponible. Une porte verrouillée ne peut pas être entrouverte.
+Les portes utilisent uniquement E : un appui bref ouvre ou ferme ; maintenir E entrouvre pour observer ; relâcher referme. Le battant reste opaque et l’œil reste du côté du joueur. B est supprimé. Une porte verrouillée ne peut pas être entrouverte ; maintenir E depuis l’intérieur permet de la déverrouiller.
 
 Si le rendu reste sous 24 images/seconde après le premier ajustement automatique, un second palier réduit la résolution. La fluidité doit toujours être vérifiée sur le matériel du joueur.
+
+## Reprise visuelle et observation de la terrasse
+
+Les battants reçoivent la même lumière d’ambiance stable que leur environnement : ils restent en bois lisible quand la pièce est éclairée. Les plafonds sont placés sous la dalle de l’étage pour éviter sa sous-face noire en première personne. Le canapé du salon regarde maintenant la table basse et la télévision. Le bureau possède une seconde bibliothèque, un tapis et une lampe de travail commandée par l’éclairage de la pièce. Les indications d’interaction sont placées au-dessus du bandeau de commandes.
+
+Des buissons couvrent les approches latérales et le bord de la terrasse côté piscine, avec des ouvertures pour circuler. Accroupi, lampe éteinte, leur feuillage dissimule ; la végétation proche s’atténue visuellement en première personne pour permettre l’observation. Deux abris de rangement en bois, à l’ouest et à l’est de la terrasse, servent aussi de cachettes : E pour entrer, E maintenu pour regarder dehors, relâcher pour refermer, puis E bref pour sortir. Observer expose toujours au regard d’un invité.
+
+Le bar extérieur est à hauteur de taille, avec façade à lattes, bouteilles et verres. Il masque sa propre géométrie sans faire disparaître les personnages entiers. La portée des projecteurs correspond mieux à l’éclairage de la terrasse et les guirlandes ont des supports visibles. `node tests/visual-review.mjs` permet de reproduire les scènes de contrôle et leurs captures dans `test-results/`, en complément des parcours solo et première personne.

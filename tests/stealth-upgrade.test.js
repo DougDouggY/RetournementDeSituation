@@ -52,7 +52,40 @@ test('darkness prevents sight, light requires facing, and crouched bushes provid
   assert.equal(s.canSee(g, p), false);
 });
 
-test('E keyhole leaves door closed and view darkness follows the room switch', () => {
+test('terrace cover spans both approaches and garden shelters allow E observation and safe exit', () => {
+  assert.ok(bushes.some((b) => b.z <= -27 && b.x > 18));
+  assert.ok(bushes.some((b) => b.z <= -27 && b.x < -18));
+  const shelters = props.filter((p) => p.outdoor && p.type === 'wardrobe');
+  assert.equal(shelters.length, 2);
+  for (const shelter of shelters) {
+    const s = game(),
+      p = s.players[0];
+    const h = hides.find((h) => h.prop === shelter.id);
+    assert.equal(blocked(1, h.x, h.z), false);
+    Object.assign(p, { f: 1, x: h.x, z: h.z });
+    const before = { x: p.x, z: p.z };
+    s.setInput('p', { use: true });
+    s.action('p', 'beginUse');
+    s.action('p', 'endUse');
+    assert.equal(p.hidden, h.id);
+    s.action('p', 'beginUse');
+    s.time += 0.5;
+    s.updatePeek(p, false);
+    assert.equal(p.hidePeek, true);
+    assert.equal(
+      blocked(1, peekView(p, s.doorStates).x, peekView(p, s.doorStates).z, s.doorStates, 0.05),
+      false,
+    );
+    s.action('p', 'endUse');
+    assert.equal(p.hidePeek, false);
+    s.action('p', 'beginUse');
+    s.action('p', 'endUse');
+    assert.equal(p.hidden, null);
+    assert.deepEqual({ x: p.x, z: p.z }, before);
+  }
+});
+
+test('E hold opens a narrow slit and release closes it', () => {
   const s = game(),
     p = s.players[0];
   Object.assign(p, { x: -26.1, z: -1 });
@@ -60,11 +93,12 @@ test('E keyhole leaves door closed and view darkness follows the room switch', (
   s.action('p', 'beginUse');
   s.time += 0.6;
   s.updatePeek(p, false);
-  assert.equal(p.peeking, 'entry-west');
-  assert.equal(s.doorStates['entry-west'], false);
-  assert.ok(peekView(p, s.doorStates).x > -25);
+  assert.equal(p.doorPeek, 'entry-west');
+  assert.equal(s.doorStates['entry-west'], 'ajar');
+  assert.ok(peekView(p, s.doorStates).x < -25);
+  assert.equal(p.x, -26.1);
   s.action('p', 'endUse');
-  assert.equal(p.peeking, null);
+  assert.equal(p.doorPeek, null);
   assert.equal(s.doorStates['entry-west'], false);
 });
 

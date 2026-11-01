@@ -29,7 +29,7 @@ $('#app').innerHTML = `
 <section id="lobby" class="panel hidden"><div class="eyebrow">LA PORTE EST ENCORE OUVERTE.</div><h2>Bienvenue dans<br>les ennuis.</h2><p>Partagez ce code avec votre partenaire.</p><button id="copy-code" title="Copier le code"><strong id="room-code"></strong><span>Copier ↗</span></button><div class="roles"><button data-character="0"><span class="mask-icon diag">◈</span><strong>DIAG</strong><small>LE MAUVAIS PRESSENTIMENT</small><span class="role-status"></span></button><button data-character="1"><span class="mask-icon swonni">◈</span><strong>Swonni</strong><small>LA PIRE DES BONNES IDÉES</small><span class="role-status"></span></button></div><p id="lobby-status"></p><button id="start" class="primary" disabled>Commencer la nuit <span>↗</span></button><button id="practice" class="text-button">Jouer seul avec ce personnage</button><button id="leave" class="text-button">← Quitter le salon</button><p class="lobby-help">ZQSD / WASD · Marcher &nbsp; E · Interagir<br>Espace · Courir &nbsp; Shift · S’accroupir &nbsp; F · Lampe</p></section>
 <div id="hud" class="hidden"><div class="hud-top"><div class="night"><span class="tiny">TENIR JUSQU’À L’AUBE</span><strong id="timer">09:00</strong><span id="objective"></span><span id="floor-name"></span></div><div class="room-tag"><span id="mode-label">SALON</span> <b id="hud-code"></b><button id="hud-settings" aria-label="Paramètres">☷</button></div></div><div id="observer-controls" class="hidden"><span>VUE GLOBALE · MOLETTE : ZOOM</span><button data-floor="1" aria-pressed="true">RDC</button><button data-floor="2">Étage</button><label>Vue <select id="observe-view"><option value="full">Jardin + maison</option><option value="house">Maison</option><option value="follow">Suivre IA</option></select></label><label>Vitesse <select id="observe-speed"><option value="1">×1</option><option value="2">×2</option><option value="4">×4</option></select></label></div><button id="change-view" class="view-toggle">Changer de vue · F2</button><div id="fps-reticle" class="hidden">+</div><button id="fps-look" class="hidden">Cliquer pour regarder avec la souris</button><div id="team"></div><div id="toast" role="status"></div><div id="dialogue"></div><div id="intro" class="hidden"><div class="eyebrow">ÇA NE SE PASSE PAS COMME PRÉVU.</div><h2>LES PROIES ONT<br>CHANGÉ DE CAMP.</h2><p>Cachez-vous. Ils arrivent dans <b id="intro-count">10</b> secondes.</p></div><div class="hud-bottom"><div class="stealth"><span id="stealth-label">DISCRET</span><div class="meter"><i id="stamina"></i></div><span id="inventory">CLIC DROIT · BOUTEILLES × 3</span></div><div id="interaction"></div><div class="control-help"><kbd>Shift</kbd> accroupi <kbd>E</kbd> action / maintenir <kbd>F</kbd> lampe · Clic gauche : attaque · Clic droit maintenu : bouteille · Espace : courir</div></div><div id="rescue-bar" class="hidden"><span>DÉTACHER LE PARTENAIRE</span><div class="meter"><i></i></div></div><div id="connection" class="hidden"></div><div id="scoreboard" class="panel hidden"><div class="eyebrow">ON FAIT LE POINT.</div><h2>État de la nuit</h2><div id="scoreboard-content"></div><p id="rules">Survivez 9 minutes. E : portes, cachettes, escaliers et objets.<br>Clic droit maintenu puis relâché : lancer une bouteille.<br>Capturé ? Votre partenaire dispose de 75 secondes pour vous libérer.<br>Maintenir E à proximité pendant 2,5 secondes.<br>Les paramètres ne mettent pas la partie en pause.</p></div></div>
 <section id="end" class="panel hidden"><div class="eyebrow" id="end-eyebrow"></div><h2 id="end-title"></h2><p id="end-text"></p><button id="restart" class="primary">Encore une mauvaise idée ↗</button><button id="end-leave" class="text-button">Retour à l’accueil</button></section>
-<dialog id="settings"><button class="close" id="settings-close" aria-label="Fermer">×</button><div class="eyebrow">UN PEU DE CONTRÔLE.</div><h2>Paramètres</h2><label>Ambiance / musique<input id="music" type="range" min="0" max="100" value="22"></label><label>Effets sonores<input id="effects" type="range" min="0" max="100" value="55"></label><label>Voix des invités<input id="voices" type="range" min="0" max="100" value="55"></label><label class="check"><input id="quality" type="checkbox"> Mode performances (sans ombres)</label><p>Shift : accroupi · E : actions de proximité · clic gauche : attaque · clic droit maintenu : bouteille. Deux vues : F2 · première personne : clic pour capturer la souris<br>Déplacement : ZQSD ou WASD / flèches<br>Courir : Maj · S’accroupir : Ctrl ou C<br>V : escalader une fenêtre ouverte<br>E : interagir / maintenir pour sauver · F : lampe<br>X maintenu : nettoyer le sang (3 s)<br>R : corps · E près d’une cachette avec un corps : dissimuler<br>G : lancer · Tab : équipe · Échap : paramètres<br><br>En multijoueur, la nuit continue dans les paramètres.<br>Voix françaises : synthèse vocale du navigateur, si disponible.</p></dialog><div id="error" role="alert" class="hidden"></div>`;
+<dialog id="settings"><button class="close" id="settings-close" aria-label="Fermer">×</button><div class="eyebrow">UN PEU DE CONTRÔLE.</div><h2>Paramètres</h2><label>Ambiance / musique<input id="music" type="range" min="0" max="100" value="22"></label><label>Effets sonores<input id="effects" type="range" min="0" max="100" value="55"></label><label>Voix des invités<input id="voices" type="range" min="0" max="100" value="55"></label><label class="check"><input id="quality" type="checkbox"> Mode performances (sans ombres)</label><p>ZQSD / WASD ou flèches : déplacement · Shift : accroupi · Espace : courir<br>E bref : interagir / ouvrir / fermer<br>E maintenu : entrouvrir une porte, observer depuis une cachette, nettoyer ou déverrouiller une fenêtre<br>Relâcher E : refermer l’observation<br>Clic gauche : attaque · Clic droit maintenu puis relâché : bouteille<br>F : lampe · F2 : changer de vue · Échap : paramètres<br><br>Voix françaises : synthèse vocale du navigateur, si disponible.</p></dialog><div id="error" role="alert" class="hidden"></div>`;
 if (SOLO_ONLY) {
   $('.coop-options').classList.add('hidden');
 }
@@ -394,7 +394,7 @@ function updateUI() {
     state.observer
       ? 'Observation : le tueur est contrôlé par une IA. Les boutons affichent chaque niveau sans masquage des pièces. La lumière d’observation ne modifie pas les lumières ni la détection du jeu. Vitesse ×1, ×2 ou ×4 ; Échap pour suspendre la simulation. Le plan exact des deux niveaux se trouve dans les plans de la maison.'
       : state.mode === 'solo'
-        ? 'Entrez depuis le jardin. Shift : accroupi. E : porte, cachette, escalier, fenêtre ouverte et corps. Maintenir E : nettoyer le sang, ouvrir une fenêtre ou observer depuis une cachette. Accroupi + E maintenu devant une porte : trou de serrure ; debout depuis la pièce : verrou. Clic gauche : éliminer une cible isolée. Clic droit maintenu puis relâché : bouteille. B : entrouvrir/refermer une porte. F : lampe ; Espace : courir. Ombre et buissons dissimulent ; lumière, bruit et indices peuvent vous trahir. Échap : pause.'
+        ? 'Entrez depuis le jardin. Shift : accroupi. E : porte, cachette, escalier, fenêtre ouverte et corps. Maintenir E : nettoyer le sang, ouvrir une fenêtre ou observer depuis une cachette. E bref : ouvrir/fermer une porte. E maintenu : entrouvrir pour observer ; relâcher : refermer. Clic gauche : éliminer une cible isolée. Clic droit maintenu puis relâché : bouteille. F : lampe ; Espace : courir. Ombre et buissons dissimulent ; lumière, bruit et indices peuvent vous trahir. Échap : pause.'
         : 'Shift : accroupi. E : actions de proximité ; maintenir E : fenêtre, nettoyage, serrure ou sauvetage. Clic gauche : cible isolée. Clic droit maintenu puis relâché : bouteille. F : lampe ; Espace : courir. Les bruits attirent les invités ; les preuves déclenchent la chasse.',
   );
   const secs = Math.ceil(state.remaining);
@@ -462,10 +462,10 @@ function updateUI() {
               ? 'LAMPE ALLUMÉE · VISIBLE'
               : me.running
                 ? 'BRUYANT'
-                : illuminationAt(me, state.lights, state.power) <= 0.18
-                  ? 'DANS L’OMBRE'
-                  : inBush(me) && me.crouching
-                    ? 'CAMOUFLÉ · BUISSON'
+                : inBush(me) && me.crouching
+                  ? 'CAMOUFLÉ · BUISSON'
+                  : illuminationAt(me, state.lights, state.power) <= 0.18
+                    ? 'DANS L’OMBRE'
                     : me.crouching
                       ? 'ACCROUPI · ÉCLAIRÉ'
                       : 'ÉCLAIRÉ · VISIBLE DE FACE',
@@ -583,6 +583,7 @@ function updateUI() {
 }
 function interaction(p) {
   if (p.status !== 'free') return '';
+  if (p.doorPeek) return 'Maintenir E · Observer par la fente · Relâcher pour refermer';
   if (p.peeking) return 'Maintenir E · Trou de serrure · Relâcher pour reculer';
   if (p.hidden)
     return p.hidePeek
@@ -663,7 +664,9 @@ function interaction(p) {
       ? state.doors[obj.id]
         ? 'E · Escalader la fenêtre'
         : 'Maintenir E · Déverrouiller (2 s), puis E : escalader'
-      : `${state.doorLocks?.[obj.id] ? 'VERROUILLÉE · Maintenir E debout pour déverrouiller de l’intérieur' : 'Maintenir E debout : verrouiller de l’intérieur'} · E · ${state.doors[obj.id] === 'ajar' ? 'Ouvrir complètement (B : refermer)' : state.doors[obj.id] ? 'Fermer' : 'Ouvrir'} la porte${!obj.patio ? ' · B : entrouvrir · Shift + maintenir E : serrure · Debout + maintenir E : verrou' : ''}`
+      : state.doorLocks?.[obj.id]
+        ? 'Maintenir E · Déverrouiller depuis l’intérieur'
+        : 'E bref · Ouvrir / fermer · Maintenir E · Entrouvrir pour observer'
     : kind === 'hide'
       ? 'E · Se cacher'
       : kind === 'stairs'
@@ -717,7 +720,6 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE') send({ type: 'action', action: 'beginUse' });
   if (e.code === 'KeyF') send({ type: 'action', action: 'torch' });
   if (e.code === 'KeyL') send({ type: 'action', action: 'lock' });
-  if (e.code === 'KeyB') send({ type: 'action', action: 'ajar' });
   if (e.code === 'KeyV') send({ type: 'action', action: 'climb' });
   if (e.code === 'KeyR') send({ type: 'action', action: 'drag' });
   if (e.code === 'KeyG') send({ type: 'action', action: 'charge' });
@@ -823,7 +825,10 @@ function frame(now) {
   const observedPlayer = state?.players.find((p) => p.id === myId);
   const fpsView =
     !!state &&
-    (scene.firstPerson || observedPlayer?.hidden || observedPlayer?.peeking) &&
+    (scene.firstPerson ||
+      observedPlayer?.hidden ||
+      observedPlayer?.peeking ||
+      observedPlayer?.doorPeek) &&
     !state.observer;
   $('#fps-reticle').classList.toggle('hidden', !fpsView);
   $('#fps-look').classList.toggle(
@@ -832,7 +837,7 @@ function frame(now) {
       !!document.pointerLockElement ||
       $('#settings').open ||
       state.phase === 'ended' ||
-      !!state?.players.find((p) => p.id === myId && (p.peeking || p.hidden)),
+      !!state?.players.find((p) => p.id === myId && (p.peeking || p.hidden || p.doorPeek)),
   );
   $('#change-view').classList.toggle('hidden', !state || !!state.observer);
   const me = state?.players.find((p) => p.id === myId);
@@ -893,6 +898,7 @@ Object.defineProperty(window, '__RDS', {
           {
             angle: p.rotation.y - p.userData.baseAngle,
             opaque: p.children.filter((m) => m.isMesh).every((m) => !m.material.transparent),
+            surfaceGlow: scene.doorSurfaceMaterials.get(id)?.map((m) => m.emissiveIntensity) || [],
           },
         ]),
     ),
@@ -909,6 +915,10 @@ Object.defineProperty(window, '__RDS', {
     visibleGuards: [...scene.actors]
       .filter(([id, a]) => id.startsWith('g') && a.root.visible)
       .map(([id]) => id),
+    foliage: [...scene.bushMeshes].map(([id, bush]) => ({
+      id,
+      opacity: bush.children.find((m) => m.isMesh)?.material.opacity,
+    })),
     activePointLights: (() => {
       let count = 0;
       scene.scene.traverseVisible((o) => {
