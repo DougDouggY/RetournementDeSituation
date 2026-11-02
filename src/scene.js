@@ -41,7 +41,22 @@ const palettes = [
   { floor: 0x56655c, wall: 0x75908a },
   { floor: 0x6b5355, wall: 0x968784 },
 ];
-function visualPose(p) {
+function hideProgress(p, time) {
+  const m = p.hideMotion;
+  if (!m || time >= m.at + m.duration) return null;
+  const t = THREE.MathUtils.clamp(((time - m.at) / m.duration - 0.2) / 0.6, 0, 1);
+  return t * t * (3 - 2 * t);
+}
+function visualPose(p, time = 0) {
+  const hiding = hideProgress(p, time);
+  if (hiding !== null) {
+    const m = p.hideMotion;
+    return new THREE.Vector3(
+      THREE.MathUtils.lerp(m.fromX, m.x, hiding),
+      (p.f - 1) * FLOOR_HEIGHT,
+      THREE.MathUtils.lerp(m.fromZ, m.z, hiding),
+    );
+  }
   if (p.stair) {
     const s = p.stair,
       t = Math.min(1, s.elapsed / s.duration);
@@ -379,20 +394,23 @@ function furniture(p) {
         emissiveIntensity: 0.2,
       });
       break;
-    case 'bush':
-      for (let i = 0; i < 10; i++)
+    case 'bush': {
+      const columns = p.hedge ? Math.ceil(w / 0.65) : 5;
+      const rows = p.hedge ? Math.ceil(d / 0.65) : 2;
+      for (let i = 0; i < columns * rows; i++)
         sphere(
           group,
-          (((i % 5) + 0.5) / 5 - 0.5) * w,
-          0.65 + (i % 3) * 0.06,
-          ((Math.floor(i / 5) + 0.5) / 2 - 0.5) * d,
+          (((i % columns) + 0.5) / columns - 0.5) * w,
+          (p.hedge ? 0.55 : 0.65) + (i % 3) * 0.03,
+          ((Math.floor(i / columns) + 0.5) / rows - 0.5) * d,
           1,
           [0x294a32, 0x385b39, 0x456444][i % 3],
-          w / 7,
-          0.62,
-          d / 3,
+          (w / columns) * 0.63,
+          p.hedge ? 0.5 : 0.62,
+          (d / rows) * 0.63,
         );
       break;
+    }
     case 'plant':
       cylinder(group, 0, 0.24, 0, 0.26, 0.19, 0.46, 0x86634e);
       for (let i = 0; i < 5; i++) {
@@ -1469,7 +1487,7 @@ export class GameScene {
     }
     const lit = illuminationAt(p, this.lastState?.lights, this.lastState?.power) !== 0;
     for (const material of a.ambientMaterials) material.emissiveIntensity = lit ? 0.2 : 0;
-    const target = visualPose(p);
+    const target = visualPose(p, this.lastState?.time);
     const previous = a.root.position.clone();
     a.root.position.lerp(target, Math.min(1, dt * 16));
     const speed = previous.distanceTo(a.root.position) / Math.max(dt, 0.001);
@@ -1523,6 +1541,10 @@ export class GameScene {
     if (p.interactUntil > (this.lastState?.time || 0)) {
       a.arms[1].rotation.x = -1.2 + Math.sin(t * 15) * 0.2;
     }
+    if (hideProgress(p, this.lastState.time) !== null) {
+      a.arms[0].rotation.x = -0.9;
+      a.arms[1].rotation.x = -1.1;
+    }
     if (p.attackUntil > (this.lastState?.time || 0))
       a.arms[1].rotation.x = -1.8 + Math.sin(t * 30) * 0.4;
     if (p.dragging) {
@@ -1571,7 +1593,7 @@ export class GameScene {
           [ATRIUM, ...stairHoles].some(
             (h) => Math.abs(p.x - h.x) < h.w / 2 && Math.abs(p.z - h.z) < h.d / 2,
           ))) &&
-      (!p.hidden || this.lastState.time - (p.hideAt || 0) < 0.55) &&
+      (!p.hidden || hideProgress(p, this.lastState.time) !== null) &&
       p.alive !== false;
     const me = this.viewer;
     if (me && p.id !== me.id && !this.firstPerson && p.f === me.f)
@@ -1591,16 +1613,44 @@ export class GameScene {
     for (let i = 0; i < this.previewActors.length; i++)
       this.previewActors[i].root.visible = !state && i !== 1;
     const me = state?.players.find((p) => p.id === myId);
+    const animationTime = state?.time || 0;
+    const looking = !!me?.peeking;
+    if ((this.keyholeTransitionAt || 0) > animationTime) {
+      this.keyholeBlend = 0;
+      this.keyholeFrom = 0;
+      this.keyholeTarget = looking;
+      this.keyholeTransitionAt = animationTime;
+      this.lastKeyhole = null;
+    }
+    if (looking !== this.keyholeTarget || (this.keyholeTransitionAt || 0) > animationTime) {
+      this.keyholeFrom = this.keyholeBlend || 0;
+      this.keyholeTransitionAt = animationTime;
+      this.keyholeTarget = looking;
+    }
+    this.keyholeBlend = me
+      ? THREE.MathUtils.lerp(
+          this.keyholeFrom || 0,
+          looking ? 1 : 0,
+          THREE.MathUtils.clamp((animationTime - (this.keyholeTransitionAt || 0)) / 0.8, 0, 1),
+        )
+      : 0;
+    if (me?.peeking) this.lastKeyhole = { ...me };
+    const wasHideTransition = this.hideTransitionActive;
+    this.hideTransitionActive = !!me && hideProgress(me, state.time) !== null;
     const observer = !!state?.observer;
     this.observerLight.intensity = observer ? 1.8 : 0;
     this.scene.fog.density = observer ? 0 : 0.012;
     this.viewer = observer ? null : me;
     if (observer && this.observerView === 'follow') this.observerFloor = me.f;
     const fps =
-      !!me && (this.firstPerson || !!me.hidden || !!me.peeking || !!me.doorPeek) && !observer;
+      !!me &&
+      (this.firstPerson || !!me.hidden || this.keyholeBlend > 0 || this.hideTransitionActive) &&
+      !observer;
     this.effectiveFirstPerson = fps;
     const f = observer ? this.observerFloor : (me?.f ?? 1);
-    const viewingPosition = me ? peekView(me, state.doors) : null;
+    const viewingPosition = me
+      ? peekView(this.keyholeBlend > 0.5 && this.lastKeyhole ? this.lastKeyhole : me, state.doors)
+      : null;
     const indoors = fps && regionAt(f, viewingPosition.x, viewingPosition.z) !== 'outside';
     this.ambientLight.intensity = indoors ? 0.015 : 0.16;
     this.moon.intensity = indoors ? 0 : 0.2;
@@ -1898,7 +1948,7 @@ export class GameScene {
       const light = this.sharedBeams[i],
         p = lightSources[i];
       light.intensity =
-        p && (!fps || p.id === myId || lineClear(f, me, p, state.doors, true))
+        p && (!fps || p.id === myId || lineClear(f, viewingPosition, p, state.doors, true))
           ? p.id.startsWith('g')
             ? 24
             : 85
@@ -1986,16 +2036,19 @@ export class GameScene {
         occupant = state?.players.find((p) => p.hidden === h?.id);
       for (const mat of cabinet.userData.outdoorMaterials || [])
         mat.emissiveIntensity = power ? 0.18 : 0.025;
-      const opening = occupant
-        ? occupant.hidePeek
-          ? 0.19
-          : this.elapsed - (this.cabinetSeen?.get(id) ?? this.elapsed) < 0.6
-            ? 1.1
-            : 0
+      const moving = state?.players.find(
+        (p) => p.hideMotion?.hide === h?.id && hideProgress(p, state.time) !== null,
+      );
+      const motionTime = moving
+        ? (state.time - moving.hideMotion.at) / moving.hideMotion.duration
         : 0;
-      this.cabinetSeen ||= new Map();
-      if (occupant && !this.cabinetSeen.has(id)) this.cabinetSeen.set(id, this.elapsed);
-      if (!occupant) this.cabinetSeen.delete(id);
+      const opening = moving
+        ? 1.15 * Math.min(1, motionTime / 0.2, (1 - motionTime) / 0.2)
+        : occupant
+          ? occupant.hidePeek
+            ? 0.19
+            : 0
+          : 0;
       cabinet.userData.cabinetLeaves.forEach(
         (leaf, i) =>
           (leaf.rotation.y = THREE.MathUtils.damp(leaf.rotation.y, (i ? 1 : -1) * opening, 12, dt)),
@@ -2012,21 +2065,50 @@ export class GameScene {
       });
     }
     if (fps) {
-      const height = me.peeking ? 1.02 : me.crouching || me.hidden ? 0.95 : 1.65;
-      const eye = peekView(me, state.doors);
-      const pose = visualPose(me),
-        desired = new THREE.Vector3(eye.x, height + pose.y, eye.z);
+      const motion = hideProgress(me, state.time);
+      const height =
+        motion !== null
+          ? THREE.MathUtils.lerp(me.hideMotion.fromHeight, me.hideMotion.toHeight, motion)
+          : me.crouching || me.hidden
+            ? 0.95
+            : 1.65;
+      const pose = visualPose(me, state.time);
+      const desired = new THREE.Vector3(pose.x, height + pose.y, pose.z);
+      if (me.hidden && me.hidePeek && !this.hideTransitionActive) {
+        const eye = peekView(me, state.doors);
+        desired.x = eye.x;
+        desired.z = eye.z;
+      }
+      if (this.keyholeBlend > 0 && this.lastKeyhole) {
+        const eye = peekView(this.lastKeyhole, state.doors);
+        const t = this.keyholeBlend * this.keyholeBlend * (3 - 2 * this.keyholeBlend);
+        desired.lerp(new THREE.Vector3(eye.x, (me.f - 1) * FLOOR_HEIGHT + 1.02, eye.z), t);
+      }
       if (me.stair) {
         desired.x = pose.x;
         desired.z = pose.z;
       }
-      if (!this.eyePosition || this.eyePosition.distanceTo(desired) > 4 || me.peeking)
+      if (
+        !this.eyePosition ||
+        this.eyePosition.distanceTo(desired) > 4 ||
+        this.hideTransitionActive ||
+        wasHideTransition ||
+        this.keyholeBlend > 0
+      )
         this.eyePosition = desired;
-      else this.eyePosition.lerp(desired, 1 - Math.exp(-dt * 24));
+      else
+        this.eyePosition.lerp(
+          desired,
+          1 - Math.exp(-dt * (this.hideTransitionActive || this.keyholeBlend > 0 ? 9 : 24)),
+        );
       this.fpsCamera.position.copy(this.eyePosition);
-      const hide = hides.find((h) => h.id === me.hidden),
+      const hide = hides.find(
+          (h) => h.id === (me.hidden || (this.hideTransitionActive ? me.hideMotion?.hide : null)),
+        ),
         cabinet = props.find((p) => p.id === hide?.prop);
-      const door = doors.find((d) => d.id === (me.peeking || me.doorPeek));
+      if (this.hideTransitionActive && !me.hideMotion.entering && cabinet)
+        this.lookYaw = cabinet.rotation || 0;
+      const door = doors.find((d) => d.id === this.lastKeyhole?.peeking);
       const keyholeYaw = door
         ? door.axis === 'z'
           ? me.x < door.x
@@ -2036,15 +2118,25 @@ export class GameScene {
             ? 0
             : Math.PI
         : this.lookYaw;
-      const yaw = me.hidden
-        ? cabinet?.rotation || 0
-        : me.peeking || me.doorPeek
-          ? keyholeYaw
-          : this.lookYaw;
+      const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+      let yaw = this.lookYaw;
+      if (me.hidden)
+        yaw +=
+          wrap((cabinet?.rotation || 0) - yaw) *
+          (this.hideTransitionActive && me.hideMotion.entering ? motion : 1);
+      if (this.keyholeBlend > 0)
+        yaw =
+          this.lookYaw +
+          wrap(keyholeYaw - this.lookYaw) *
+            (this.keyholeBlend * this.keyholeBlend * (3 - 2 * this.keyholeBlend));
+      if (this.eyeYaw === undefined) this.eyeYaw = this.lookYaw;
+      const turn = Math.atan2(Math.sin(yaw - this.eyeYaw), Math.cos(yaw - this.eyeYaw));
+      if (this.keyholeBlend > 0 || this.hideTransitionActive) this.eyeYaw = yaw;
+      else this.eyeYaw += turn * (1 - Math.exp(-dt * 24));
       const direction = new THREE.Vector3(
-        Math.sin(yaw) * Math.cos(this.lookPitch),
-        Math.sin(this.lookPitch),
-        Math.cos(yaw) * Math.cos(this.lookPitch),
+        Math.sin(this.eyeYaw) * Math.cos(this.keyholeBlend > 0 ? 0 : this.lookPitch),
+        Math.sin(this.keyholeBlend > 0 ? 0 : this.lookPitch),
+        Math.cos(this.eyeYaw) * Math.cos(this.keyholeBlend > 0 ? 0 : this.lookPitch),
       );
       this.fpsCamera.lookAt(this.fpsCamera.position.clone().add(direction));
       // The held torch follows the eye, including vertical aim.

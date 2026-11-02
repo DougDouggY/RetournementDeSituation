@@ -408,21 +408,27 @@ for (const [x, z, w, d] of [
   [-32, -16, 3, 5],
   [-29, -22, 3, 4],
   [-26, -27, 4, 3],
-  [-21, -28, 4, 2],
-  [-16, -28, 3, 2],
-  [-9, -28, 3, 1.6],
-  [-2, -28, 3, 1.6],
-  [6, -28, 3, 1.6],
-  [14, -28, 3, 1.6],
-  [21, -28, 3, 1.6],
-  [-25, -24, 2, 3],
-  [24.5, -25.5, 2, 3],
   [27, -25, 3, 4],
   [31, -12, 3, 5],
   [31, 3, 3, 4],
   [-29, 17, 4, 3],
 ]) {
   bushes.push(prop(1, 'outside', 'bush', x, z, w, d, { solid: false, occludes: false }));
+}
+// A low continuous hedge outlines the deck; four deliberate gaps remain walkable.
+export const terraceHedge = [];
+for (const [x, z, w, d] of [
+  [-15.5, -28, 17, 1.3],
+  [-2.25, -28, 5.5, 1.3],
+  [12.25, -28, 19.5, 1.3],
+  [-24, -24.5, 1.3, 7],
+  [-24, -17.5, 1.3, 3],
+  [22, -24.5, 1.3, 7],
+  [22, -17.5, 1.3, 3],
+]) {
+  const b = prop(1, 'outside', 'bush', x, z, w, d, { solid: false, occludes: false, hedge: true });
+  bushes.push(b);
+  terraceHedge.push(b);
 }
 export function inBush(p) {
   return p.f === 1 && bushes.some((b) => inside(p.x, p.z, b));
@@ -656,15 +662,6 @@ export function pathfind(f, start, end, states = {}, avoid = []) {
 }
 
 export function peekView(viewer, states = {}) {
-  const slit = doors.find((d) => d.id === viewer.doorPeek && d.f === viewer.f);
-  if (slit && states[slit.id] === 'ajar' && distance(viewer, slit) <= 1.9) {
-    const side = Math.sign(slit.axis === 'z' ? viewer.x - slit.x : viewer.z - slit.z) || 1;
-    return {
-      ...viewer,
-      x: slit.axis === 'x' ? slit.x + slit.w * 0.35 : slit.x + side * 0.35,
-      z: slit.axis === 'z' ? slit.z - slit.d * 0.35 : slit.z + side * 0.35,
-    };
-  }
   if (viewer.hidden && viewer.hidePeek) {
     const hide = hides.find((h) => h.id === viewer.hidden),
       prop = props.find((p) => p.id === hide?.prop);

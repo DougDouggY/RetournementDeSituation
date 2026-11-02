@@ -150,9 +150,9 @@ export class Simulation {
         hidePeek: false,
         hideReturn: null,
         hideAt: -10,
+        hideMotion: null,
         pendingDoor: null,
         peeking: null,
-        doorPeek: null,
         opening: null,
         openProgress: 0,
         attackCooldown: 0,
@@ -302,9 +302,7 @@ export class Simulation {
   }
   endUse(p, cancel = false) {
     const pending = p.pendingDoor,
-      observing = !!p.peeking || !!p.hidePeek || !!p.doorPeek;
-    if (p.doorPeek && this.doorStates[p.doorPeek] === 'ajar') this.doorStates[p.doorPeek] = false;
-    p.doorPeek = null;
+      observing = !!p.peeking || !!p.hidePeek;
     p.peeking = null;
     p.hidePeek = false;
     p.pendingDoor = null;
@@ -346,17 +344,22 @@ export class Simulation {
       this.endUse(p, true);
       return false;
     }
+    if (p.peeking && (!p.input.crouch || this.doorStates[d.id])) {
+      this.endUse(p, true);
+      return false;
+    }
     if (held >= 0.45 && !pending.done) {
-      if (this.doorLocks[d.id]) {
+      if (pending.crouch && !this.doorStates[d.id]) {
+        p.peeking = d.id;
+        pending.done = true;
+      } else if (this.doorLocks[d.id]) {
         this.toggleLock(p);
         pending.done = true;
       } else {
-        this.doorStates[d.id] = 'ajar';
-        p.doorPeek = d.id;
         pending.done = true;
       }
     }
-    return !!p.peeking || !!p.doorPeek;
+    return !!p.peeking;
   }
   beginStair(entity, s) {
     entity.stair = {
@@ -389,6 +392,9 @@ export class Simulation {
       return;
     if (p.climb) return;
     if (p.hidden) {
+      const hide = p.hidden,
+        fromX = p.x,
+        fromZ = p.z;
       p.hidden = null;
       if (p.hideReturn) {
         p.x = p.hideReturn.x;
@@ -397,6 +403,18 @@ export class Simulation {
       }
       p.hidePeek = false;
       p.hideAt = this.time;
+      p.hideMotion = {
+        hide,
+        entering: false,
+        fromX,
+        fromZ,
+        x: p.x,
+        z: p.z,
+        at: this.time,
+        duration: 1.1,
+        fromHeight: 0.95,
+        toHeight: p.crouching ? 0.95 : 1.65,
+      };
       p.invuln = Math.max(p.invuln, 0.4);
       if (p.input.run) this.noise(p.f, p.x, p.z, 8, 'Une sortie tout sauf discrète.', p.id);
       return;
@@ -464,6 +482,18 @@ export class Simulation {
       const hidingProp = props.find((prop) => prop.id === obj.prop);
       p.x = hidingProp?.x ?? obj.x;
       p.z = hidingProp?.z ?? obj.z;
+      p.hideMotion = {
+        hide: obj.id,
+        entering: true,
+        fromX: p.hideReturn.x,
+        fromZ: p.hideReturn.z,
+        x: p.x,
+        z: p.z,
+        at: this.time,
+        duration: 1.1,
+        fromHeight: p.crouching ? 0.95 : 1.65,
+        toHeight: 0.95,
+      };
       this.event('hide', 'Retenez votre souffle.', { player: p.id });
       for (const g of this.guards)
         if (g.f === p.f && g.target === p.id && lineClear(p.f, g, p, this.doorStates))
@@ -601,7 +631,7 @@ export class Simulation {
       this.endUse(p, type === 'cancelUse');
       return;
     }
-    if (p.peeking || p.doorPeek) return;
+    if (p.peeking) return;
     if (type === 'cancelThrow') {
       p.charging = false;
       p.throwCharge = 0;
@@ -1683,6 +1713,11 @@ export class Simulation {
         continue;
       }
       if (p.status !== 'free') continue;
+      if (p.hideMotion && this.time < p.hideMotion.at + p.hideMotion.duration) {
+        p.moving = false;
+        p.running = false;
+        continue;
+      }
       if (p.stair) continue;
       if (p.climb) {
         const c = p.climb;

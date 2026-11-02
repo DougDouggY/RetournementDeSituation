@@ -60,16 +60,17 @@ try {
   await page.keyboard.down('ShiftLeft');
   await page.waitForFunction(() => window.__RDS.state.players[0].crouching);
   await page.keyboard.down('KeyE');
-  await page.waitForFunction(() => window.__RDS.state.players[0].doorPeek === 'entry-west');
-  await page.waitForFunction(() => Math.abs(window.__RDS.doorLeaves['entry-west'].angle) > 0.3);
+  await page.waitForFunction(() => window.__RDS.state.players[0].peeking === 'entry-west');
+  await page.waitForFunction(() => Math.abs(window.__RDS.doorLeaves['entry-west'].angle) < 0.02);
   assert.equal(await page.evaluate(() => window.__RDS.doorLeaves['entry-west'].opaque), true);
+  await page.waitForFunction(() => window.__RDS.keyholeBlend > 0.99);
   const bodyBeforePeek = await page.evaluate(() => window.__RDS.state.players[0].x);
-  assert.ok(await page.evaluate(() => window.__RDS.eye.z < window.__RDS.state.players[0].z));
+  assert.ok(await page.evaluate(() => window.__RDS.eye.x > window.__RDS.state.players[0].x));
   await page.screenshot({ path: 'test-results/held-e-peek.png' });
   assert.equal(await page.evaluate(() => window.__RDS.state.players[0].x), bodyBeforePeek);
   await page.keyboard.up('KeyE');
   await page.keyboard.up('ShiftLeft');
-  await page.waitForFunction(() => !window.__RDS.state.players[0].doorPeek);
+  await page.waitForFunction(() => !window.__RDS.state.players[0].peeking);
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() => window.__RDS.state.doors['entry-west'] === true);
   await page.keyboard.press('KeyE');
@@ -134,6 +135,8 @@ try {
   await page.waitForFunction(() => window.__RDS.state.players[0].bottles === 2);
   // Reach the office wardrobe using only movement and E.
   const move = async (key, predicate) => {
+    const reversed = await page.evaluate(() => Math.sin(window.__RDS.eye.yaw) < 0);
+    if (reversed) key = { KeyW: 'KeyS', KeyS: 'KeyW', KeyA: 'KeyD', KeyD: 'KeyA' }[key] || key;
     await page.keyboard.down(key);
     await page.waitForFunction(predicate, null, { polling: 50 });
     await page.keyboard.up(key);
@@ -157,6 +160,10 @@ try {
   assert.ok(await page.evaluate(() => !!window.__RDS.state.players[0].hidden));
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() => !window.__RDS.state.players[0].hidden);
+  await page.waitForFunction(() => {
+    const p = window.__RDS.state.players[0];
+    return window.__RDS.state.time >= p.hideMotion.at + p.hideMotion.duration;
+  });
   // Stop near the centre of the one-metre opening; state arrives every 100 ms,
   // so waiting beyond its centre can leave the player against the door jamb.
   await move('KeyD', () => window.__RDS.state.players[0].z > 7.85);

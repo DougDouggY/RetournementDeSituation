@@ -72,13 +72,16 @@ try {
   await shot(page, 'door-brown');
   await page.keyboard.press('KeyB');
   assert.equal(await page.evaluate(() => window.__RDS.state.doors['entry-west']), false);
+  await page.keyboard.down('ShiftLeft');
   await page.keyboard.down('KeyE');
-  await page.waitForFunction(() => window.__RDS.state.players[0].doorPeek === 'entry-west');
-  await page.waitForFunction(() => window.__RDS.doorLeaves['entry-west'].angle > 0.3);
+  await page.waitForFunction(() => window.__RDS.state.players[0].peeking === 'entry-west');
+  await page.waitForFunction(() => window.__RDS.keyholeBlend > 0.99);
+  await page.waitForFunction(() => Math.abs(window.__RDS.doorLeaves['entry-west'].angle) < 0.02);
   assert.equal(await page.evaluate(() => window.__RDS.doorLeaves['entry-west'].opaque), true);
   assert.equal(await page.evaluate(() => window.__RDS.state.players[0].x), -26.1);
-  await shot(page, 'door-slit');
+  await shot(page, 'door-keyhole');
   await page.keyboard.up('KeyE');
+  await page.keyboard.up('ShiftLeft');
   await page.waitForFunction(() => window.__RDS.state.doors['entry-west'] === false);
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() => window.__RDS.state.doors['entry-west'] === true);
@@ -110,6 +113,7 @@ try {
   }));
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() => !!window.__RDS.state.players[0].hidden);
+  await page.waitForFunction(() => !window.__RDS.hideTransitionActive);
   await page.keyboard.down('KeyE');
   await page.waitForFunction(() => window.__RDS.state.players[0].hidePeek);
   await page.waitForFunction(() =>

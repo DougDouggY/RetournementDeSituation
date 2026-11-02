@@ -1,5 +1,17 @@
 # Vérifications exécutées — 29 octobre 2026
 
+## Serrure, transitions d’armoire et haie continue
+
+- `npm test` : **104 tests réussis**, aucun échec ni test ignoré. Les nouveaux contrôles couvrent l’emplacement de la serrure sur les deux faces de chaque porte, l’observation de la vraie pièce et de son état lumineux, l’annulation lorsqu’on se relève, les mouvements temporisés d’armoire et les quatre passages de la haie.
+- `npm run test:fps` : parcours complet réussi après l’animation de serrure et la sortie d’armoire orientée vers l’extérieur. Le déplacement automatisé adapte ses touches à cette orientation réelle ; les portes, interrupteurs, escaliers et changements de vue restent contrôlés au clavier et à la souris, sans téléportation de test.
+- `npm run test:solo` : parcours réussi avec la porte restant fermée pendant l’observation et retour à la vue choisie au relâchement.
+- `node tests/keyhole-browser.mjs` : cinq contrôles réussis, sans erreur JavaScript/WebGL : une personne, deux personnes, pièce éteinte, une seule lampe portée active et transitions d’armoire. La caméra approche progressivement puis recule ; le corps du joueur et le battant de porte restent immobiles. Une lampe réellement présente dans la pièce reste visible depuis la serrure.
+- `node tests/visual-review.mjs` : dix scènes réussies, avec la haie basse continue, ses passages, les cachettes et le nouveau cadre de serrure.
+
+Captures inspectées : `keyhole-one-person.png`, `keyhole-two-people.png`, `keyhole-dark-room.png`, `keyhole-one-light.png`, `wardrobe-entry-motion.png` et `wardrobe-exit-motion.png`, dans `test-results/`. Le rapport ciblé est `test-results/keyhole-browser.json`.
+
+Le contrôle ciblé ralentit uniquement l’horloge de ses scènes interceptées pour observer les étapes intermédiaires sous SwiftShader ; le parcours complet utilise le build de production et son horloge normale. La vue à la serrure est le rendu de la pièce, sans fond prédéfini ni vision nocturne. Les captures ne remplacent pas une mesure de fluidité sur le matériel du joueur.
+
 ## Reprise visuelle, terrasse et commandes E — 1er novembre 2026
 
 - `npm test` : **100 tests réussis**, sans échec ni test ignoré. Les abris extérieurs sont accessibles, permettent l’observation avec E maintenu et rendent le joueur à sa position d’entrée. Les buissons couvrent les deux approches de la terrasse. Les tests des portes vérifient E bref, maintien, relâchement et annulation avec un battant opaque.

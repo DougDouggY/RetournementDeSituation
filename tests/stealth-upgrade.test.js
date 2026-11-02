@@ -53,8 +53,8 @@ test('darkness prevents sight, light requires facing, and crouched bushes provid
 });
 
 test('terrace cover spans both approaches and garden shelters allow E observation and safe exit', () => {
-  assert.ok(bushes.some((b) => b.z <= -27 && b.x > 18));
-  assert.ok(bushes.some((b) => b.z <= -27 && b.x < -18));
+  assert.ok(bushes.some((b) => b.z <= -27 && b.x + b.w / 2 >= 20));
+  assert.ok(bushes.some((b) => b.z <= -27 && b.x - b.w / 2 <= -20));
   const shelters = props.filter((p) => p.outdoor && p.type === 'wardrobe');
   assert.equal(shelters.length, 2);
   for (const shelter of shelters) {
@@ -85,7 +85,7 @@ test('terrace cover spans both approaches and garden shelters allow E observatio
   }
 });
 
-test('E hold opens a narrow slit and release closes it', () => {
+test('crouched E hold looks through the keyhole without opening the door', () => {
   const s = game(),
     p = s.players[0];
   Object.assign(p, { x: -26.1, z: -1 });
@@ -93,12 +93,12 @@ test('E hold opens a narrow slit and release closes it', () => {
   s.action('p', 'beginUse');
   s.time += 0.6;
   s.updatePeek(p, false);
-  assert.equal(p.doorPeek, 'entry-west');
-  assert.equal(s.doorStates['entry-west'], 'ajar');
-  assert.ok(peekView(p, s.doorStates).x < -25);
+  assert.equal(p.peeking, 'entry-west');
+  assert.equal(s.doorStates['entry-west'], false);
+  assert.ok(peekView(p, s.doorStates).x > -25);
   assert.equal(p.x, -26.1);
   s.action('p', 'endUse');
-  assert.equal(p.doorPeek, null);
+  assert.equal(p.peeking, null);
   assert.equal(s.doorStates['entry-west'], false);
 });
 

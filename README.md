@@ -60,7 +60,7 @@ L’archive `retournement-de-situation-solo.zip` contient le site statique : ell
 | E bref | Porte, objet, cachette, escalier, fenêtre ouverte, prendre/déposer un corps |
 | E maintenu près du sang | Nettoyer (3 secondes) |
 | E maintenu devant une fenêtre fermée | Déverrouiller (2 secondes), puis E pour escalader |
-| E maintenu devant une porte simple | Entrouvrir et observer ; relâcher pour refermer |
+| Accroupi + E maintenu devant une porte fermée | Approcher la tête de la serrure et observer sans ouvrir ; relâcher pour reculer |
 | E maintenu devant une porte verrouillée, depuis la pièce | Déverrouiller |
 | E maintenu depuis une cachette | Entrouvrir et observer ; un invité face à l’ouverture peut vous repérer |
 | Clic gauche | Éliminer une cible isolée à portée |
@@ -223,7 +223,7 @@ Les conversations ne portent plus au-delà de six mètres et ne traversent plus 
 
 Les projecteurs muraux de la terrasse produisent des plages colorées, les guirlandes alternent des tons chauds et pastel, et les appliques du salon reprennent cette ambiance. Davantage d’invités dansent dès le début. Les pièces restent éclairées indépendamment de la proximité des fenêtres ; interrupteurs et coffret permettent toujours de couper le courant. Le bureau reçoit un clavier, un support d’écran et un caisson à tiroirs, en conservant le passage vers sa porte et son interrupteur.
 
-Les portes utilisent uniquement E : un appui bref ouvre ou ferme ; maintenir E entrouvre pour observer ; relâcher referme. Le battant reste opaque et l’œil reste du côté du joueur. B est supprimé. Une porte verrouillée ne peut pas être entrouverte ; maintenir E depuis l’intérieur permet de la déverrouiller.
+Les portes utilisent uniquement E : un appui bref ouvre ou ferme ; en étant accroupi, maintenir E permet de regarder à travers la serrure, sans ouvrir le battant. Relâcher E, se relever ou bouger ramène le regard en arrière. B et l’entrebâillement des portes ne sont plus utilisés. Maintenir E debout depuis l’intérieur permet de déverrouiller une porte verrouillée.
 
 Si le rendu reste sous 24 images/seconde après le premier ajustement automatique, un second palier réduit la résolution. La fluidité doit toujours être vérifiée sur le matériel du joueur.
 
@@ -234,3 +234,13 @@ Les battants reçoivent la même lumière d’ambiance stable que leur environne
 Des buissons couvrent les approches latérales et le bord de la terrasse côté piscine, avec des ouvertures pour circuler. Accroupi, lampe éteinte, leur feuillage dissimule ; la végétation proche s’atténue visuellement en première personne pour permettre l’observation. Deux abris de rangement en bois, à l’ouest et à l’est de la terrasse, servent aussi de cachettes : E pour entrer, E maintenu pour regarder dehors, relâcher pour refermer, puis E bref pour sortir. Observer expose toujours au regard d’un invité.
 
 Le bar extérieur est à hauteur de taille, avec façade à lattes, bouteilles et verres. Il masque sa propre géométrie sans faire disparaître les personnages entiers. La portée des projecteurs correspond mieux à l’éclairage de la terrasse et les guirlandes ont des supports visibles. `node tests/visual-review.mjs` permet de reproduire les scènes de contrôle et leurs captures dans `test-results/`, en complément des parcours solo et première personne.
+
+## Observation à la serrure et haie basse
+
+La tête rejoint progressivement la vraie position de la serrure et sa hauteur de 1,02 m, puis recule au relâchement. Le cadre a une ouverture en forme de serrure. La vue est le rendu de la pièce réelle, dans l’axe de la porte : murs, meubles et personnages continuent d’occulter normalement ce qui se trouve derrière eux. Il n’y a ni image prédéfinie ni vision nocturne. L’éclairage de la pièce et les sources portées restent ceux de la scène. La lampe du joueur n’est pas projetée à travers la porte fermée.
+
+Les armoires ouvrent leurs battants pendant l’entrée et la sortie, avec déplacement progressif du point de vue et changement de hauteur. Les déplacements au clavier attendent la fin de cette courte transition. Une fois sorti, le joueur regarde vers l’extérieur de l’armoire, dans le sens de sa sortie.
+
+Une haie basse continue, d’environ 1,1 m, suit les trois bords libres de la terrasse ; la maison ferme le quatrième côté. Quatre ouvertures d’environ deux mètres permettent de circuler. Le joueur peut se déplacer accroupi dans la haie pour observer ; le feuillage proche s’atténue uniquement pour sa caméra. Les autres invités conservent leurs règles de détection, notamment à très courte portée ou si la lampe est allumée.
+
+Vérification ciblée : `node tests/keyhole-browser.mjs` produit les captures avec une personne, deux personnes, la pièce éteinte, une seule source portée allumée et les transitions de l’armoire. Les scènes sont injectées uniquement dans le Worker intercepté par le test, sans commande spéciale dans le jeu publié.
